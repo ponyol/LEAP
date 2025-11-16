@@ -22,7 +22,7 @@ from leap.core import (
     load_raw_logs,
     merge_results,
 )
-from leap.parsers import BaseParser, PythonParser
+from leap.parsers import BaseParser, GoParser, JSParser, PythonParser, RubyParser
 from leap.schemas import AnalyzedLogEntry, RawLogEntry
 
 __version__ = "0.1.0"
@@ -34,6 +34,9 @@ __all__ = [
     # Parsers
     "BaseParser",
     "PythonParser",
+    "GoParser",
+    "RubyParser",
+    "JSParser",
     # Core
     "discover_files",
     "filter_changed_files",

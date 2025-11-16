@@ -12,7 +12,7 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from leap.core import aggregate_results, discover_files, filter_changed_files
-from leap.parsers import PythonParser
+from leap.parsers import BaseParser, GoParser, JSParser, PythonParser, RubyParser
 from leap.schemas import RawLogEntry
 from leap.utils.logger import get_logger
 
@@ -159,21 +159,57 @@ def extract(
             TextColumn("[progress.description]{task.description}"),
             console=console,
         ) as progress:
-            # Currently only Python parser is implemented
+            # Parse Python files
             if "python" in discovered:
                 task = progress.add_task(
                     f"Parsing {len(discovered['python'])} Python file(s)...", total=None
                 )
-                python_entries = _parse_python_files(discovered["python"])
+                python_entries = _parse_files(discovered["python"], PythonParser(), "Python")
                 all_log_entries.extend(python_entries)
                 progress.update(task, completed=True)
 
-            # TODO: Add other language parsers
-            for lang in discovered:
-                if lang != "python":
-                    console.print(
-                        f"[yellow]Warning: {lang} parser not yet implemented, skipping[/yellow]"
-                    )
+            # Parse Go files
+            if "go" in discovered:
+                task = progress.add_task(
+                    f"Parsing {len(discovered['go'])} Go file(s)...", total=None
+                )
+                try:
+                    go_entries = _parse_files(discovered["go"], GoParser(), "Go")
+                    all_log_entries.extend(go_entries)
+                    progress.update(task, completed=True)
+                except RuntimeError as e:
+                    progress.update(task, completed=True)
+                    console.print(f"[yellow]Warning: {e}[/yellow]")
+
+            # Parse Ruby files
+            if "ruby" in discovered:
+                task = progress.add_task(
+                    f"Parsing {len(discovered['ruby'])} Ruby file(s)...", total=None
+                )
+                try:
+                    ruby_entries = _parse_files(discovered["ruby"], RubyParser(), "Ruby")
+                    all_log_entries.extend(ruby_entries)
+                    progress.update(task, completed=True)
+                except RuntimeError as e:
+                    progress.update(task, completed=True)
+                    console.print(f"[yellow]Warning: {e}[/yellow]")
+
+            # Parse JavaScript/TypeScript files
+            if "javascript" in discovered or "typescript" in discovered:
+                js_files = discovered.get("javascript", [])
+                ts_files = discovered.get("typescript", [])
+                all_js_files = js_files + ts_files
+
+                task = progress.add_task(
+                    f"Parsing {len(all_js_files)} JS/TS file(s)...", total=None
+                )
+                try:
+                    js_entries = _parse_files(all_js_files, JSParser(), "JavaScript/TypeScript")
+                    all_log_entries.extend(js_entries)
+                    progress.update(task, completed=True)
+                except RuntimeError as e:
+                    progress.update(task, completed=True)
+                    console.print(f"[yellow]Warning: {e}[/yellow]")
 
         console.print(f"Extracted {len(all_log_entries)} log statement(s)")
 
@@ -204,17 +240,18 @@ def extract(
         raise typer.Exit(1) from None
 
 
-def _parse_python_files(file_paths: list[Path]) -> list[RawLogEntry]:
+def _parse_files(file_paths: list[Path], parser: BaseParser, language_name: str) -> list[RawLogEntry]:
     """
-    Parse Python files and extract log entries.
+    Parse files and extract log entries using a given parser.
 
     Args:
-        file_paths: List of Python file paths to parse
+        file_paths: List of file paths to parse
+        parser: Parser instance to use
+        language_name: Name of the language (for logging)
 
     Returns:
         List of all extracted log entries
     """
-    parser = PythonParser()
     all_entries: list[RawLogEntry] = []
 
     for file_path in file_paths:
@@ -223,13 +260,13 @@ def _parse_python_files(file_paths: list[Path]) -> list[RawLogEntry]:
             all_entries.extend(entries)
         except SyntaxError as e:
             logger.warning(
-                f"Skipping file with syntax errors: {file_path}",
+                f"Skipping {language_name} file with syntax errors: {file_path}",
                 extra={"context": {"file": str(file_path), "error": str(e)}},
             )
             continue
         except Exception as e:
             logger.error(
-                f"Failed to parse file: {file_path}",
+                f"Failed to parse {language_name} file: {file_path}",
                 extra={"context": {"file": str(file_path), "error": str(e)}},
             )
             continue

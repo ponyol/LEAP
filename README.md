@@ -73,11 +73,9 @@ LEAP generates a `raw_logs.json` file with the following structure:
 
 ### Currently Implemented
 - ✅ **Python**: Full support for `logging`, `logger`, and custom logger instances
-
-### Planned
-- 🚧 **Go**: Support for `log.*`, `zerolog`, and other popular logging libraries
-- 🚧 **Ruby**: Support for `Logger`, `Rails.logger`
-- 🚧 **JavaScript/TypeScript**: Support for `console.*`, `winston`, `pino`
+- ✅ **Go**: Support for `log.*` (Printf, Fatalf, etc.), `zerolog`, and structured logging libraries
+- ✅ **Ruby**: Support for `Logger`, `@logger`, `Rails.logger`
+- ⚠️ **JavaScript/TypeScript**: Basic support for `console.*`, `winston`, `pino` (under development)
 
 ## Architecture
 
