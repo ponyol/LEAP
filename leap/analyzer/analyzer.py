@@ -352,8 +352,8 @@ class LogAnalyzer:
         }
 
         output_file = Path(output_path)
-        with open(output_file, "w") as f:
-            json.dump(output_data, f, indent=2)
+        with open(output_file, "w", encoding="utf-8") as f:
+            json.dump(output_data, f, indent=2, ensure_ascii=False)
 
         logger.info(f"Analysis complete: {output_path}")
         logger.info(f"Success: {successful}/{len(results)} ({successful/len(results)*100:.1f}%)")
