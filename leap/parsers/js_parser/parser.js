@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
-import fs from 'fs';
-import path from 'path';
-import { parse as acornParse } from 'acorn';
-import * as walk from 'acorn-walk';
-import { parse as tsParse } from '@typescript-eslint/typescript-estree';
+const fs = require('fs');
+const path = require('path');
+const acorn = require('acorn');
+const walk = require('acorn-walk');
+const { parse: tsParse } = require('@typescript-eslint/typescript-estree');
 
 /**
  * LogEntry represents a single extracted log statement
@@ -50,7 +50,7 @@ class JSLogParser {
         });
       } else {
         // Parse JavaScript
-        ast = acornParse(this.source, {
+        ast = acorn.parse(this.source, {
           ecmaVersion: 'latest',
           sourceType: 'module',
           locations: true,
@@ -71,25 +71,34 @@ class JSLogParser {
   walkAST(ast) {
     const self = this;
 
-    const visitors = {
+    walk.simple(ast, {
       FunctionDeclaration(node) {
         const oldFunc = self.currentFunction;
         self.currentFunction = node;
-        walk.base.FunctionDeclaration(node, this);
+        // Walk children manually
+        for (const key in node) {
+          if (key === 'body' && node.body) {
+            walk.simple(node.body, this);
+          }
+        }
         self.currentFunction = oldFunc;
       },
 
       FunctionExpression(node) {
         const oldFunc = self.currentFunction;
         self.currentFunction = node;
-        walk.base.FunctionExpression(node, this);
+        if (node.body) {
+          walk.simple(node.body, this);
+        }
         self.currentFunction = oldFunc;
       },
 
       ArrowFunctionExpression(node) {
         const oldFunc = self.currentFunction;
         self.currentFunction = node;
-        walk.base.ArrowFunctionExpression(node, this);
+        if (node.body && node.body.type === 'BlockStatement') {
+          walk.simple(node.body, this);
+        }
         self.currentFunction = oldFunc;
       },
 
@@ -99,9 +108,7 @@ class JSLogParser {
           self.entries.push(entry);
         }
       },
-    };
-
-    walk.recursive(ast, null, visitors);
+    });
   }
 
   /**

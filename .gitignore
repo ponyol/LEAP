@@ -207,3 +207,4 @@ marimo/_lsp/
 __marimo__/
 *.json
 .pytest_cache/
+leap/parsers/go_parser/go_parser
