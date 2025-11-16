@@ -208,3 +208,9 @@ __marimo__/
 *.json
 .pytest_cache/
 leap/parsers/go_parser/go_parser
+
+# Node.js dependencies for JavaScript parser
+node_modules/
+package-lock.json
+npm-debug.log
+yarn-error.log
