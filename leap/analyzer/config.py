@@ -2,8 +2,7 @@
 
 import os
 from typing import Any, Literal
-from pydantic import BaseModel, Field, field_validator
-from pydantic_core import ValidationInfo
+from pydantic import BaseModel, Field, field_validator, ValidationInfo
 
 
 class AnalyzerConfig(BaseModel):
