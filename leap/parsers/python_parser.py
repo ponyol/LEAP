@@ -11,7 +11,6 @@ and extract logging statements. It handles various logging patterns:
 
 import ast
 from pathlib import Path
-from typing import Any
 
 from leap.parsers.base import BaseParser
 from leap.schemas import RawLogEntry

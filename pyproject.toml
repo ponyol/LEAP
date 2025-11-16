@@ -68,6 +68,14 @@ strict = true
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+# Allow subclassing from Any (for external libs without stubs)
+disallow_subclassing_any = false
+# Allow untyped decorators (for external libs without stubs)
+disallow_untyped_decorators = false
+
+[[tool.mypy.overrides]]
+module = ["typer", "rich.*", "pydantic"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

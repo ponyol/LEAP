@@ -4,9 +4,8 @@ Main CLI entry point for LEAP (Log Extraction & Analysis Pipeline).
 This module provides the command-line interface for the leap-cli tool.
 """
 
-import sys
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal, cast
 
 import typer
 from rich.console import Console
@@ -104,7 +103,7 @@ def extract(
         # Convert path to absolute
         root_path = path.resolve()
 
-        console.print(f"[bold blue]LEAP - Log Extraction & Analysis Pipeline[/bold blue]")
+        console.print("[bold blue]LEAP - Log Extraction & Analysis Pipeline[/bold blue]")
         console.print(f"Scanning: {root_path}")
 
         # Step 1: Discover files
@@ -116,11 +115,11 @@ def extract(
             task = progress.add_task("Discovering source files...", total=None)
 
             # Filter by languages if specified
-            language_filter = None
+            language_filter: set[Literal["python", "go", "ruby", "javascript", "typescript"]] | None = None
             if languages:
                 # Validate and convert language names
                 valid_languages = {"python", "go", "ruby", "javascript", "typescript"}
-                language_filter = set()
+                temp_filter = set()
                 for lang in languages:
                     if lang.lower() not in valid_languages:
                         console.print(
@@ -128,7 +127,9 @@ def extract(
                             f"Valid options: {', '.join(sorted(valid_languages))}"
                         )
                         raise typer.Exit(1)
-                    language_filter.add(lang.lower())  # type: ignore
+                    temp_filter.add(lang.lower())
+                # Cast is safe because we've validated all values
+                language_filter = cast(set[Literal["python", "go", "ruby", "javascript", "typescript"]], temp_filter)
 
             discovered = discover_files(root_path, languages=language_filter)
 
@@ -200,7 +201,7 @@ def extract(
         if verbose:
             console.print_exception()
         logger.error(f"CLI error: {e}", exc_info=True)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
 
 def _parse_python_files(file_paths: list[Path]) -> list[RawLogEntry]:
