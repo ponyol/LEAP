@@ -6,7 +6,7 @@ This module provides the command-line interface for the leap-cli tool.
 
 import asyncio
 from pathlib import Path
-from typing import Annotated, Literal, cast
+from typing import Annotated, Any, Literal, cast
 
 import typer
 from rich.console import Console
@@ -441,7 +441,7 @@ def analyze(
         analyzer = LogAnalyzer(config)
 
         # Run analysis (async)
-        async def run_analysis():
+        async def run_analysis() -> dict[str, Any]:
             return await analyzer.analyze_file(
                 str(input_file.resolve()),
                 str(output.resolve())

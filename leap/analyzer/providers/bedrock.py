@@ -49,9 +49,9 @@ class BedrockProvider(LLMProvider):
         self.region = region
         self.profile = profile
         self.timeout = timeout
-        self._client = None
+        self._client: Any = None
 
-    def _get_client(self):
+    def _get_client(self) -> Any:
         """Lazy initialization of Bedrock client."""
         if self._client is None:
             try:
@@ -113,7 +113,7 @@ class BedrockProvider(LLMProvider):
         else:
             raise ValueError(f"Unsupported model family for Bedrock: {model}")
 
-    def _parse_bedrock_response(self, response_body: dict) -> str:
+    def _parse_bedrock_response(self, response_body: dict[str, Any]) -> str:
         """Parse response from Bedrock API.
 
         Args:
@@ -129,7 +129,7 @@ class BedrockProvider(LLMProvider):
         if "content" in response_body:
             content = response_body["content"]
             if isinstance(content, list) and len(content) > 0:
-                return content[0].get("text", "")
+                return str(content[0].get("text", ""))
 
         raise ProviderError(f"Unexpected response format: {response_body}")
 

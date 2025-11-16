@@ -89,7 +89,7 @@ disallow_subclassing_any = false
 disallow_untyped_decorators = false
 
 [[tool.mypy.overrides]]
-module = ["typer", "rich.*", "pydantic", "anthropic", "boto3", "botocore.*", "httpx"]
+module = ["typer", "rich.*", "pydantic", "pydantic_core", "anthropic", "boto3", "botocore.*", "httpx"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

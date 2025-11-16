@@ -63,7 +63,7 @@ async def process_batch(
     concurrency: int = 10,
     show_progress: bool = True,
     on_error: str = "continue"
-) -> list[R]:
+) -> list[R | None]:
     """Process items in parallel with concurrency limit.
 
     This function processes a list of items concurrently, with a maximum
@@ -106,7 +106,7 @@ async def process_batch(
     total = len(items)
     semaphore = Semaphore(concurrency)
     progress = ProgressTracker(total, show_progress)
-    results = [None] * total  # Pre-allocate results list
+    results: list[R | None] = [None] * total  # Pre-allocate results list
 
     async def process_with_limit(index: int, item: T) -> None:
         """Process single item with semaphore limit and progress tracking."""
@@ -150,7 +150,7 @@ async def process_batch_with_retry(
     concurrency: int = 10,
     max_retries: int = 3,
     show_progress: bool = True
-) -> tuple[list[R], list[tuple[int, T, Exception]]]:
+) -> tuple[list[R | None], list[tuple[int, T, Exception | None]]]:
     """Process items with automatic retry on failure.
 
     This is similar to process_batch, but automatically retries failed items
@@ -187,8 +187,8 @@ async def process_batch_with_retry(
     total = len(items)
     semaphore = Semaphore(concurrency)
     progress = ProgressTracker(total, show_progress)
-    results = [None] * total
-    failed_items = []
+    results: list[R | None] = [None] * total
+    failed_items: list[tuple[int, T, Exception | None]] = []
 
     async def process_with_retry(index: int, item: T) -> None:
         """Process item with retry logic."""

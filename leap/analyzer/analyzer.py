@@ -33,7 +33,7 @@ class AnalysisCache:
         self._hits = 0
         self._misses = 0
 
-    def _compute_key(self, entry: dict) -> str:
+    def _compute_key(self, entry: dict[str, Any]) -> str:
         """Compute cache key from log entry.
 
         Args:
@@ -52,7 +52,7 @@ class AnalysisCache:
         # Hash it for compact key
         return hashlib.sha256(cache_input.encode()).hexdigest()
 
-    def get(self, entry: dict) -> dict[str, Any] | None:
+    def get(self, entry: dict[str, Any]) -> dict[str, Any] | None:
         """Retrieve cached analysis for entry.
 
         Args:
@@ -75,7 +75,7 @@ class AnalysisCache:
 
         return result
 
-    def set(self, entry: dict, result: dict[str, Any]) -> None:
+    def set(self, entry: dict[str, Any], result: dict[str, Any]) -> None:
         """Store analysis result in cache.
 
         Args:
@@ -88,7 +88,7 @@ class AnalysisCache:
         key = self._compute_key(entry)
         self._cache[key] = result
 
-    def stats(self) -> dict[str, int]:
+    def stats(self) -> dict[str, int | float]:
         """Get cache statistics.
 
         Returns:
@@ -166,7 +166,7 @@ class LogAnalyzer:
         logger.info(f"Loaded prompt template: {prompt_path}")
         return prompts
 
-    def _build_prompt(self, entry: dict) -> str:
+    def _build_prompt(self, entry: dict[str, Any]) -> str:
         """Build prompt from template and log entry data.
 
         Args:
@@ -186,7 +186,7 @@ class LogAnalyzer:
             line_number=entry.get("line_number", 0)
         )
 
-    async def analyze_entry(self, entry: dict) -> dict[str, Any]:
+    async def analyze_entry(self, entry: dict[str, Any]) -> dict[str, Any]:
         """Analyze single log entry with caching.
 
         Args:
@@ -252,7 +252,7 @@ class LogAnalyzer:
                 "source_file": f"{entry.get('file_path', '')}:{entry.get('line_number', 0)}"
             }
 
-    async def analyze_batch(self, entries: list[dict]) -> list[dict]:
+    async def analyze_batch(self, entries: list[dict[str, Any]]) -> list[dict[str, Any] | None]:
         """Analyze multiple entries in parallel.
 
         Args:
@@ -263,7 +263,7 @@ class LogAnalyzer:
         """
         logger.info(f"Analyzing {len(entries)} log entries with concurrency={self.config.concurrency}")
 
-        results = await process_batch(
+        results: list[dict[str, Any] | None] = await process_batch(
             entries,
             self.analyze_entry,
             concurrency=self.config.concurrency,
@@ -329,17 +329,19 @@ class LogAnalyzer:
         failed = len(results) - successful
 
         # 5. Save results
-        output_data = {
+        metadata: dict[str, Any] = {
+            "provider": self.config.provider,
+            "model": self.config.model,
+            "language": self.config.language,
+            "total_entries": len(results),
+            "successful": successful,
+            "failed": failed,
+            "cache_stats": self.cache.stats()
+        }
+
+        output_data: dict[str, Any] = {
             "analyzed_logs": results,
-            "metadata": {
-                "provider": self.config.provider,
-                "model": self.config.model,
-                "language": self.config.language,
-                "total_entries": len(results),
-                "successful": successful,
-                "failed": failed,
-                "cache_stats": self.cache.stats()
-            }
+            "metadata": metadata
         }
 
         output_file = Path(output_path)
@@ -352,4 +354,4 @@ class LogAnalyzer:
         if failed > 0:
             logger.warning(f"Failed: {failed}/{len(results)} ({failed/len(results)*100:.1f}%)")
 
-        return output_data["metadata"]
+        return metadata

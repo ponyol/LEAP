@@ -3,7 +3,7 @@
 import json
 import re
 import logging
-from typing import Any
+from typing import Any, cast
 from pydantic import BaseModel, ValidationError, field_validator
 
 logger = logging.getLogger(__name__)
@@ -79,7 +79,7 @@ def extract_json_from_text(text: str) -> dict[str, Any]:
     """
     # Strategy 1: Direct parsing
     try:
-        return json.loads(text)
+        return cast(dict[str, Any], json.loads(text))
     except json.JSONDecodeError:
         pass
 
@@ -91,7 +91,7 @@ def extract_json_from_text(text: str) -> dict[str, Any]:
     )
     if json_block_match:
         try:
-            return json.loads(json_block_match.group(1))
+            return cast(dict[str, Any], json.loads(json_block_match.group(1)))
         except json.JSONDecodeError:
             pass
 
@@ -103,7 +103,7 @@ def extract_json_from_text(text: str) -> dict[str, Any]:
     )
     if code_block_match:
         try:
-            return json.loads(code_block_match.group(1))
+            return cast(dict[str, Any], json.loads(code_block_match.group(1)))
         except json.JSONDecodeError:
             pass
 
@@ -111,7 +111,7 @@ def extract_json_from_text(text: str) -> dict[str, Any]:
     brace_match = re.search(r'\{.*\}', text, re.DOTALL)
     if brace_match:
         try:
-            return json.loads(brace_match.group(0))
+            return cast(dict[str, Any], json.loads(brace_match.group(0)))
         except json.JSONDecodeError:
             pass
 

@@ -1,8 +1,9 @@
 """Configuration management for LEAP Analyzer."""
 
 import os
-from typing import Literal
+from typing import Any, Literal
 from pydantic import BaseModel, Field, field_validator
+from pydantic_core import ValidationInfo
 
 
 class AnalyzerConfig(BaseModel):
@@ -91,14 +92,14 @@ class AnalyzerConfig(BaseModel):
 
     @field_validator("api_base")
     @classmethod
-    def validate_api_base(cls, v: str | None, info) -> str | None:
+    def validate_api_base(cls, v: str | None, info: ValidationInfo) -> str | None:
         """Ensure api_base has correct format for local providers."""
         if v and not v.startswith("http"):
             raise ValueError("api_base must start with http:// or https://")
         return v
 
     @classmethod
-    def from_env(cls, **overrides) -> "AnalyzerConfig":
+    def from_env(cls, **overrides: Any) -> "AnalyzerConfig":
         """Create configuration from environment variables with CLI overrides.
 
         Environment variables:

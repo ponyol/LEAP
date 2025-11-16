@@ -43,9 +43,9 @@ class OllamaProvider(LLMProvider):
         """
         self.api_base = api_base.rstrip("/")
         self.timeout = timeout
-        self._client = None
+        self._client: Any = None
 
-    def _get_client(self):
+    def _get_client(self) -> Any:
         """Lazy initialization of httpx client."""
         if self._client is None:
             try:
@@ -93,7 +93,7 @@ class OllamaProvider(LLMProvider):
         url = "/api/generate"
 
         # Build request payload
-        payload = {
+        payload: dict[str, Any] = {
             "model": model,
             "prompt": prompt,
             "stream": False,  # We want the full response at once
@@ -105,14 +105,15 @@ class OllamaProvider(LLMProvider):
 
         # Add any additional options
         if kwargs:
-            payload["options"].update(kwargs)
+            options: dict[str, Any] = payload["options"]
+            options.update(kwargs)
 
         try:
             response = await client.post(url, json=payload)
             response.raise_for_status()
 
             data = response.json()
-            return data.get("response", "")
+            return str(data.get("response", ""))
 
         except Exception as e:
             error_msg = str(e).lower()
@@ -138,7 +139,7 @@ class OllamaProvider(LLMProvider):
 
             # Check if Ollama is running by hitting the root endpoint
             response = await client.get("/")
-            return response.status_code == 200
+            return bool(response.status_code == 200)
 
         except Exception as e:
             logger.error(f"Ollama health check failed: {e}")
@@ -165,7 +166,7 @@ class OllamaProvider(LLMProvider):
         except Exception as e:
             raise ProviderError(f"Failed to list Ollama models: {e}")
 
-    async def close(self):
+    async def close(self) -> None:
         """Close the httpx client."""
         if self._client:
             await self._client.aclose()

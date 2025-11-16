@@ -40,9 +40,9 @@ class LMStudioProvider(LLMProvider):
         """
         self.api_base = api_base.rstrip("/")
         self.timeout = timeout
-        self._client = None
+        self._client: Any = None
 
-    def _get_client(self):
+    def _get_client(self) -> Any:
         """Lazy initialization of httpx client."""
         if self._client is None:
             try:
@@ -113,7 +113,7 @@ class LMStudioProvider(LLMProvider):
             # Extract message from OpenAI response format
             if "choices" in data and len(data["choices"]) > 0:
                 message = data["choices"][0].get("message", {})
-                return message.get("content", "")
+                return str(message.get("content", ""))
             else:
                 raise ProviderError(f"Unexpected response format: {data}")
 
@@ -141,7 +141,7 @@ class LMStudioProvider(LLMProvider):
 
             # Try to list models as a health check
             response = await client.get("/models")
-            return response.status_code == 200
+            return bool(response.status_code == 200)
 
         except Exception as e:
             logger.error(f"LM Studio health check failed: {e}")
@@ -168,7 +168,7 @@ class LMStudioProvider(LLMProvider):
         except Exception as e:
             raise ProviderError(f"Failed to list LM Studio models: {e}")
 
-    async def close(self):
+    async def close(self) -> None:
         """Close the httpx client."""
         if self._client:
             await self._client.aclose()

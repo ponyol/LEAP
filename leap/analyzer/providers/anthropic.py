@@ -45,9 +45,9 @@ class AnthropicProvider(LLMProvider):
             )
 
         self.timeout = timeout
-        self._client = None
+        self._client: Any = None
 
-    def _get_client(self):
+    def _get_client(self) -> Any:
         """Lazy initialization of Anthropic client."""
         if self._client is None:
             try:
@@ -106,7 +106,7 @@ class AnthropicProvider(LLMProvider):
 
             # Extract text from response
             if response.content and len(response.content) > 0:
-                return response.content[0].text
+                return str(response.content[0].text)
             else:
                 raise ProviderError("Empty response from Anthropic API")
 
