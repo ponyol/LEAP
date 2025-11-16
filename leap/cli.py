@@ -12,11 +12,11 @@ import typer
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
+from leap.analyzer import AnalyzerConfig, LogAnalyzer
 from leap.core import aggregate_results, discover_files, filter_changed_files
 from leap.parsers import BaseParser, GoParser, JSParser, PythonParser, RubyParser
 from leap.schemas import RawLogEntry
 from leap.utils.logger import get_logger
-from leap.analyzer import LogAnalyzer, AnalyzerConfig
 
 app = typer.Typer(
     name="leap",
@@ -435,7 +435,7 @@ def analyze(
             elif provider == "lmstudio":
                 console.print("  Ensure LM Studio server is running")
 
-            raise typer.Exit(1)
+            raise typer.Exit(1) from e
 
         # Create analyzer
         analyzer = LogAnalyzer(config)
@@ -470,7 +470,7 @@ def analyze(
 
     except FileNotFoundError as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
     except Exception as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
         if verbose:

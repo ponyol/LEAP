@@ -47,11 +47,11 @@ class LMStudioProvider(LLMProvider):
         if self._client is None:
             try:
                 import httpx
-            except ImportError:
+            except ImportError as exc:
                 raise ImportError(
                     "httpx required for LM Studio provider. "
                     "Install with: pip install httpx"
-                )
+                ) from exc
 
             self._client = httpx.AsyncClient(
                 timeout=self.timeout,
@@ -121,14 +121,14 @@ class LMStudioProvider(LLMProvider):
             error_msg = str(e).lower()
 
             if "timeout" in error_msg:
-                raise ProviderTimeoutError(f"LM Studio request timed out: {e}")
+                raise ProviderTimeoutError(f"LM Studio request timed out: {e}") from e
             elif "connection" in error_msg:
                 raise ProviderError(
                     f"Cannot connect to LM Studio at {self.api_base}. "
                     f"Is LM Studio running with server enabled? Error: {e}"
-                )
+                ) from e
             else:
-                raise ProviderError(f"LM Studio API error: {e}")
+                raise ProviderError(f"LM Studio API error: {e}") from e
 
     async def health_check(self) -> bool:
         """Verify LM Studio is running and accessible.
@@ -166,7 +166,7 @@ class LMStudioProvider(LLMProvider):
             return [model.get("id") for model in models]
 
         except Exception as e:
-            raise ProviderError(f"Failed to list LM Studio models: {e}")
+            raise ProviderError(f"Failed to list LM Studio models: {e}") from e
 
     async def close(self) -> None:
         """Close the httpx client."""

@@ -1,13 +1,20 @@
 """LLM provider factory and public API."""
 
-from .base import LLMProvider, ProviderError, ProviderTimeoutError, ProviderAuthError, ProviderRateLimitError
-from .anthropic import AnthropicProvider
-from .bedrock import BedrockProvider
-from .ollama import OllamaProvider
-from .lmstudio import LMStudioProvider
-
 # Import config for type hints
 from typing import TYPE_CHECKING
+
+from .anthropic import AnthropicProvider
+from .base import (
+    LLMProvider,
+    ProviderAuthError,
+    ProviderError,
+    ProviderRateLimitError,
+    ProviderTimeoutError,
+)
+from .bedrock import BedrockProvider
+from .lmstudio import LMStudioProvider
+from .ollama import OllamaProvider
+
 if TYPE_CHECKING:
     from ..config import AnalyzerConfig
 

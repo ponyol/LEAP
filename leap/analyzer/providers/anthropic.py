@@ -1,15 +1,15 @@
 """Anthropic Claude provider implementation."""
 
-import os
 import logging
+import os
 from typing import Any
 
 from .base import (
     LLMProvider,
-    ProviderError,
-    ProviderTimeoutError,
     ProviderAuthError,
-    ProviderRateLimitError
+    ProviderError,
+    ProviderRateLimitError,
+    ProviderTimeoutError,
 )
 
 logger = logging.getLogger(__name__)
@@ -52,11 +52,11 @@ class AnthropicProvider(LLMProvider):
         if self._client is None:
             try:
                 from anthropic import AsyncAnthropic
-            except ImportError:
+            except ImportError as exc:
                 raise ImportError(
                     "anthropic package required for Anthropic provider. "
                     "Install with: pip install anthropic"
-                )
+                ) from exc
 
             self._client = AsyncAnthropic(
                 api_key=self.api_key,
@@ -115,13 +115,13 @@ class AnthropicProvider(LLMProvider):
             error_msg = str(e).lower()
 
             if "authentication" in error_msg or "api key" in error_msg:
-                raise ProviderAuthError(f"Authentication failed: {e}")
+                raise ProviderAuthError(f"Authentication failed: {e}") from e
             elif "timeout" in error_msg:
-                raise ProviderTimeoutError(f"Request timed out: {e}")
+                raise ProviderTimeoutError(f"Request timed out: {e}") from e
             elif "rate limit" in error_msg or "429" in error_msg:
-                raise ProviderRateLimitError(f"Rate limit exceeded: {e}")
+                raise ProviderRateLimitError(f"Rate limit exceeded: {e}") from e
             else:
-                raise ProviderError(f"Anthropic API error: {e}")
+                raise ProviderError(f"Anthropic API error: {e}") from e
 
     async def health_check(self) -> bool:
         """Verify Anthropic API is accessible and credentials are valid.

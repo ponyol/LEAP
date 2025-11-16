@@ -6,10 +6,10 @@ from typing import Any
 
 from .base import (
     LLMProvider,
-    ProviderError,
-    ProviderTimeoutError,
     ProviderAuthError,
-    ProviderRateLimitError
+    ProviderError,
+    ProviderRateLimitError,
+    ProviderTimeoutError,
 )
 
 logger = logging.getLogger(__name__)
@@ -57,11 +57,11 @@ class BedrockProvider(LLMProvider):
             try:
                 import boto3
                 from botocore.config import Config
-            except ImportError:
+            except ImportError as exc:
                 raise ImportError(
                     "boto3 required for Bedrock provider. "
                     "Install with: pip install boto3"
-                )
+                ) from exc
 
             # Configure boto3 session
             session_kwargs = {}
@@ -187,13 +187,13 @@ class BedrockProvider(LLMProvider):
             error_msg = str(e).lower()
 
             if "credentials" in error_msg or "unauthorized" in error_msg:
-                raise ProviderAuthError(f"AWS credentials invalid: {e}")
+                raise ProviderAuthError(f"AWS credentials invalid: {e}") from e
             elif "timeout" in error_msg:
-                raise ProviderTimeoutError(f"Request timed out: {e}")
+                raise ProviderTimeoutError(f"Request timed out: {e}") from e
             elif "throttling" in error_msg or "rate" in error_msg:
-                raise ProviderRateLimitError(f"Rate limit exceeded: {e}")
+                raise ProviderRateLimitError(f"Rate limit exceeded: {e}") from e
             else:
-                raise ProviderError(f"Bedrock API error: {e}")
+                raise ProviderError(f"Bedrock API error: {e}") from e
 
     async def health_check(self) -> bool:
         """Verify Bedrock is accessible and credentials are valid.

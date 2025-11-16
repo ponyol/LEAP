@@ -1,6 +1,5 @@
 """Ollama local LLM provider implementation."""
 
-import json
 import logging
 from typing import Any
 
@@ -8,7 +7,6 @@ from .base import (
     LLMProvider,
     ProviderError,
     ProviderTimeoutError,
-    ProviderAuthError,
 )
 
 logger = logging.getLogger(__name__)
@@ -50,11 +48,11 @@ class OllamaProvider(LLMProvider):
         if self._client is None:
             try:
                 import httpx
-            except ImportError:
+            except ImportError as exc:
                 raise ImportError(
                     "httpx required for Ollama provider. "
                     "Install with: pip install httpx"
-                )
+                ) from exc
 
             self._client = httpx.AsyncClient(
                 timeout=self.timeout,
@@ -119,14 +117,14 @@ class OllamaProvider(LLMProvider):
             error_msg = str(e).lower()
 
             if "timeout" in error_msg:
-                raise ProviderTimeoutError(f"Ollama request timed out: {e}")
+                raise ProviderTimeoutError(f"Ollama request timed out: {e}") from e
             elif "connection" in error_msg:
                 raise ProviderError(
                     f"Cannot connect to Ollama at {self.api_base}. "
                     f"Is Ollama running? Error: {e}"
-                )
+                ) from e
             else:
-                raise ProviderError(f"Ollama API error: {e}")
+                raise ProviderError(f"Ollama API error: {e}") from e
 
     async def health_check(self) -> bool:
         """Verify Ollama is running and accessible.
@@ -164,7 +162,7 @@ class OllamaProvider(LLMProvider):
             return [model.get("name") for model in models]
 
         except Exception as e:
-            raise ProviderError(f"Failed to list Ollama models: {e}")
+            raise ProviderError(f"Failed to list Ollama models: {e}") from e
 
     async def close(self) -> None:
         """Close the httpx client."""

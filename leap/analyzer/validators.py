@@ -1,9 +1,10 @@
 """Validation and sanitization for LLM responses."""
 
 import json
-import re
 import logging
+import re
 from typing import Any, cast
+
 from pydantic import BaseModel, ValidationError, field_validator
 
 logger = logging.getLogger(__name__)
