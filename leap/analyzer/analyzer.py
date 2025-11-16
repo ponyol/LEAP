@@ -4,7 +4,7 @@ import hashlib
 import json
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from .batch_processor import process_batch
 from .config import AnalyzerConfig
@@ -166,6 +166,7 @@ class LogAnalyzer:
         self.cache = AnalysisCache(enabled=config.enable_cache)
         self.token_usage = TokenAccumulator()
         self.prompts = self._load_prompts()
+        self._analyzed_sources: set[str] = set()  # Track analyzed source_file for resume
 
     def _load_prompts(self) -> dict[str, str]:
         """Load prompt templates from files.
@@ -317,16 +318,87 @@ class LogAnalyzer:
 
         return results
 
+    def _get_partial_path(self, output_path: str) -> Path:
+        """Get path for partial results file.
+
+        Args:
+            output_path: Final output path
+
+        Returns:
+            Path to partial results file
+        """
+        output = Path(output_path)
+        return output.parent / f"{output.stem}.partial{output.suffix}"
+
+    def _load_partial_results(self, partial_path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]] | None:
+        """Load partial results from previous run.
+
+        Args:
+            partial_path: Path to partial results file
+
+        Returns:
+            Tuple of (results, metadata) if partial file exists, None otherwise
+        """
+        if not partial_path.exists():
+            return None
+
+        try:
+            with open(partial_path, encoding="utf-8") as f:
+                data = json.load(f)
+
+            results = data.get("analyzed_logs", [])
+            metadata = data.get("metadata", {})
+
+            # Track which sources were already analyzed
+            for result in results:
+                source = result.get("source_file", "")
+                if source:
+                    self._analyzed_sources.add(source)
+
+            logger.info(f"Loaded {len(results)} partial results from {partial_path}")
+            return (results, metadata)
+
+        except Exception as e:
+            logger.warning(f"Failed to load partial results: {e}. Starting fresh.")
+            return None
+
+    def _save_partial_results(
+        self,
+        partial_path: Path,
+        results: list[dict[str, Any]],
+        metadata: dict[str, Any]
+    ) -> None:
+        """Save partial results to file.
+
+        Args:
+            partial_path: Path to save partial results
+            results: List of analyzed log entries
+            metadata: Analysis metadata
+        """
+        try:
+            output_data = {
+                "analyzed_logs": results,
+                "metadata": metadata
+            }
+
+            with open(partial_path, "w", encoding="utf-8") as f:
+                json.dump(output_data, f, indent=2, ensure_ascii=False)
+
+        except Exception as e:
+            logger.warning(f"Failed to save partial results: {e}")
+
     async def analyze_file(
         self,
         input_path: str,
-        output_path: str
+        output_path: str,
+        resume: bool = False
     ) -> dict[str, Any]:
         """Main entry point: analyze raw_logs.json → analyzed_logs.json.
 
         Args:
             input_path: Path to raw_logs.json
             output_path: Path to output analyzed_logs.json
+            resume: If True, resume from partial results if available
 
         Returns:
             Statistics about the analysis run
@@ -356,17 +428,71 @@ class LogAnalyzer:
 
         logger.info(f"Loaded {len(entries)} log entries from {input_path}")
 
-        # 2. Health check
-        logger.info(f"Performing health check for provider: {self.config.provider}")
-        if not await self.provider.health_check():
-            raise RuntimeError(
-                f"Provider {self.config.provider} failed health check. "
-                f"Check your configuration and network connectivity."
-            )
-        logger.info("Health check passed")
+        # 2. Try to resume from partial results
+        partial_path = self._get_partial_path(output_path)
+        partial_results: list[dict[str, Any]] = []
 
-        # 3. Process batch
-        results = await self.analyze_batch(entries)
+        if resume:
+            partial_data = self._load_partial_results(partial_path)
+            if partial_data:
+                partial_results, partial_metadata = partial_data
+                # Restore token usage from partial metadata
+                if "token_usage" in partial_metadata:
+                    usage_data = partial_metadata["token_usage"]
+                    self.token_usage.input_tokens = usage_data.get("input_tokens", 0)
+                    self.token_usage.output_tokens = usage_data.get("output_tokens", 0)
+                    self.token_usage.total_tokens = usage_data.get("total_tokens", 0)
+
+                # Filter entries to only process unanalyzed ones
+                entries_to_process = [
+                    e for e in entries
+                    if f"{e.get('file_path', '')}:{e.get('line_number', 0)}" not in self._analyzed_sources
+                ]
+
+                if len(entries_to_process) < len(entries):
+                    logger.info(
+                        f"Resuming: {len(partial_results)} already analyzed, "
+                        f"{len(entries_to_process)} remaining"
+                    )
+                    entries = entries_to_process
+
+        # 3. Health check (only if there are entries to process)
+        if entries:
+            logger.info(f"Performing health check for provider: {self.config.provider}")
+            if not await self.provider.health_check():
+                raise RuntimeError(
+                    f"Provider {self.config.provider} failed health check. "
+                    f"Check your configuration and network connectivity."
+                )
+            logger.info("Health check passed")
+
+            # 4. Process batch (save partial results on error)
+            try:
+                new_results = await self.analyze_batch(entries)
+                # 5. Merge with partial results
+                # Cast partial_results to allow concatenation with new_results
+                results: list[dict[str, Any] | None] = (
+                    cast(list[dict[str, Any] | None], partial_results) + new_results
+                )
+            except Exception as e:
+                # Save partial results before re-raising
+                logger.error(f"Analysis interrupted: {e}")
+                if partial_results:
+                    # Build temporary metadata
+                    temp_metadata: dict[str, Any] = {
+                        "provider": self.config.provider,
+                        "model": self.config.model,
+                        "language": self.config.language,
+                        "total_entries": len(partial_results),
+                        "token_usage": self.token_usage.to_dict(),
+                        "status": "interrupted"
+                    }
+                    self._save_partial_results(partial_path, partial_results, temp_metadata)
+                    logger.info(f"Saved {len(partial_results)} partial results before exit")
+                raise
+        else:
+            logger.info("All entries already analyzed, using partial results")
+            results = cast(list[dict[str, Any] | None], partial_results)
 
         # 4. Count successes and failures
         successful = sum(1 for r in results if r and not r["analysis"].startswith("[Analysis failed:"))
@@ -392,6 +518,14 @@ class LogAnalyzer:
         output_file = Path(output_path)
         with open(output_file, "w", encoding="utf-8") as f:
             json.dump(output_data, f, indent=2, ensure_ascii=False)
+
+        # Clean up partial results file on successful completion
+        if partial_path.exists():
+            try:
+                partial_path.unlink()
+                logger.info(f"Removed partial results file: {partial_path}")
+            except Exception as e:
+                logger.warning(f"Failed to remove partial results file: {e}")
 
         logger.info(f"Analysis complete: {output_path}")
         logger.info(f"Success: {successful}/{len(results)} ({successful/len(results)*100:.1f}%)")

@@ -347,6 +347,13 @@ def analyze(
             help="Disable caching for duplicate log entries",
         ),
     ] = False,
+    resume: Annotated[
+        bool,
+        typer.Option(
+            "--resume",
+            help="Resume from partial results if available (useful after interruption)",
+        ),
+    ] = False,
     timeout: Annotated[
         int,
         typer.Option(
@@ -444,7 +451,8 @@ def analyze(
         async def run_analysis() -> dict[str, Any]:
             return await analyzer.analyze_file(
                 str(input_file.resolve()),
-                str(output.resolve())
+                str(output.resolve()),
+                resume=resume
             )
 
         metadata = asyncio.run(run_analysis())

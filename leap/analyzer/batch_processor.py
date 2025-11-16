@@ -6,6 +6,16 @@ from asyncio import Semaphore
 from collections.abc import Callable
 from typing import Any, TypeVar
 
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    TaskID,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
+
 logger = logging.getLogger(__name__)
 
 T = TypeVar('T')
@@ -13,20 +23,41 @@ R = TypeVar('R')
 
 
 class ProgressTracker:
-    """Track and report progress for batch processing."""
+    """Track and report progress for batch processing using rich."""
 
     def __init__(self, total: int, show_progress: bool = True):
         """Initialize progress tracker.
 
         Args:
             total: Total number of items to process
-            show_progress: Whether to print progress updates
+            show_progress: Whether to show progress bar
         """
         self.total = total
         self.completed = 0
         self.failed = 0
         self.show_progress = show_progress
         self._lock = asyncio.Lock()
+        self.progress: Progress | None = None
+        self.task_id: TaskID | None = None
+
+        if show_progress:
+            self.progress = Progress(
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                MofNCompleteColumn(),
+                TextColumn("•"),
+                TextColumn("[red]Failed: {task.fields[failed]}"),
+                TextColumn("•"),
+                TimeElapsedColumn(),
+                TextColumn("/"),
+                TimeRemainingColumn(),
+            )
+            self.progress.start()
+            self.task_id = self.progress.add_task(
+                "Analyzing...",
+                total=total,
+                failed=0
+            )
 
     async def increment(self, success: bool = True) -> None:
         """Increment progress counter.
@@ -39,23 +70,17 @@ class ProgressTracker:
             if not success:
                 self.failed += 1
 
-            if self.show_progress:
-                self._print_progress()
-
-    def _print_progress(self) -> None:
-        """Print current progress to stdout."""
-        percentage = (self.completed / self.total) * 100 if self.total > 0 else 0
-        print(
-            f"\rProgress: {self.completed}/{self.total} "
-            f"({percentage:.1f}%) | Failed: {self.failed}",
-            end="",
-            flush=True
-        )
+            if self.show_progress and self.progress and self.task_id is not None:
+                self.progress.update(
+                    self.task_id,
+                    advance=1,
+                    failed=self.failed
+                )
 
     def finish(self) -> None:
-        """Print final newline after progress is complete."""
-        if self.show_progress:
-            print()  # New line after progress bar
+        """Stop the progress display."""
+        if self.show_progress and self.progress:
+            self.progress.stop()
 
 
 async def process_batch(
