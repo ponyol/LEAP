@@ -26,6 +26,20 @@ pip install -e .
 pip install -e ".[dev]"
 ```
 
+### JavaScript/TypeScript Parser Dependencies
+
+If you plan to parse JavaScript or TypeScript files, you need to install Node.js dependencies:
+
+```bash
+cd leap/parsers/js_parser
+npm install
+cd ../../..
+```
+
+**Requirements:**
+- Node.js >= 18.0.0
+- npm or yarn
+
 ## Quick Start
 
 ### Extract logs from a repository
@@ -75,7 +89,7 @@ LEAP generates a `raw_logs.json` file with the following structure:
 - ✅ **Python**: Full support for `logging`, `logger`, and custom logger instances
 - ✅ **Go**: Support for `log.*` (Printf, Fatalf, etc.), `zerolog`, and structured logging libraries
 - ✅ **Ruby**: Support for `Logger`, `@logger`, `Rails.logger`
-- ⚠️ **JavaScript/TypeScript**: Basic support for `console.*`, `winston`, `pino` (under development)
+- ✅ **JavaScript/TypeScript**: Support for `console.*`, `winston`, `pino`, and other structured loggers (requires Node.js dependencies, see Installation)
 
 ## Architecture
 

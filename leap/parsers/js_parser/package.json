@@ -1,0 +1,27 @@
+{
+  "name": "leap-js-parser",
+  "version": "0.1.0",
+  "description": "JavaScript/TypeScript log parser for LEAP",
+  "private": true,
+  "main": "parser.js",
+  "scripts": {
+    "test": "node parser.js"
+  },
+  "dependencies": {
+    "acorn": "^8.14.0",
+    "acorn-walk": "^8.3.4",
+    "@typescript-eslint/typescript-estree": "^8.19.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "parser",
+    "ast",
+    "javascript",
+    "typescript",
+    "logs"
+  ],
+  "author": "Jemma & Oleg",
+  "license": "MIT"
+}
