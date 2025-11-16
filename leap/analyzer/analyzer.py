@@ -306,7 +306,14 @@ class LogAnalyzer:
         with open(input_file) as f:
             data = json.load(f)
 
-        entries = data.get("logs", [])
+        # Handle both formats: list directly or {"logs": [...]}
+        if isinstance(data, list):
+            entries = data
+        elif isinstance(data, dict):
+            entries = data.get("logs", [])
+        else:
+            raise ValueError(f"Invalid format in {input_path}: expected list or dict")
+
         if not entries:
             raise ValueError(f"No log entries found in {input_path}")
 
