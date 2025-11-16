@@ -69,46 +69,61 @@ class JSLogParser {
    * Walk the AST and find log calls
    */
   walkAST(ast) {
-    const self = this;
+    // Use custom recursive walk for both JS and TS to avoid acorn-walk compatibility issues
+    this.visitNode(ast);
+  }
 
-    walk.simple(ast, {
-      FunctionDeclaration(node) {
-        const oldFunc = self.currentFunction;
-        self.currentFunction = node;
-        // Walk children manually
-        for (const key in node) {
-          if (key === 'body' && node.body) {
-            walk.simple(node.body, this);
-          }
-        }
-        self.currentFunction = oldFunc;
-      },
+  /**
+   * Recursively visit AST nodes
+   */
+  visitNode(node) {
+    if (!node || typeof node !== 'object') {
+      return;
+    }
 
-      FunctionExpression(node) {
-        const oldFunc = self.currentFunction;
-        self.currentFunction = node;
-        if (node.body) {
-          walk.simple(node.body, this);
-        }
-        self.currentFunction = oldFunc;
-      },
+    // Handle function declarations/expressions - track current function context
+    if (node.type === 'FunctionDeclaration' ||
+        node.type === 'FunctionExpression' ||
+        node.type === 'ArrowFunctionExpression' ||
+        node.type === 'MethodDefinition') {
+      const oldFunc = this.currentFunction;
+      this.currentFunction = node;
+      this.visitChildren(node);
+      this.currentFunction = oldFunc;
+      return;
+    }
 
-      ArrowFunctionExpression(node) {
-        const oldFunc = self.currentFunction;
-        self.currentFunction = node;
-        if (node.body && node.body.type === 'BlockStatement') {
-          walk.simple(node.body, this);
-        }
-        self.currentFunction = oldFunc;
-      },
+    // Handle call expressions - check for log calls
+    if (node.type === 'CallExpression') {
+      const entry = this.extractLogEntry(node);
+      if (entry) {
+        this.entries.push(entry);
+      }
+    }
 
-      CallExpression(node) {
-        const entry = self.extractLogEntry(node);
-        if (entry) {
-          self.entries.push(entry);
+    // Visit all child nodes
+    this.visitChildren(node);
+  }
+
+  /**
+   * Visit all children of a node
+   */
+  visitChildren(node) {
+    for (const key in node) {
+      if (key === 'loc' || key === 'range' || key === 'tokens' || key === 'comments') {
+        continue; // Skip metadata
+      }
+
+      const child = node[key];
+
+      if (Array.isArray(child)) {
+        for (const item of child) {
+          this.visitNode(item);
         }
-      },
-    });
+      } else if (child && typeof child === 'object' && child.type) {
+        this.visitNode(child);
+      }
+    }
   }
 
   /**
