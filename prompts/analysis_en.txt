@@ -1,0 +1,49 @@
+You are a senior software engineer analyzing a log statement from source code.
+
+## Context
+- **Programming Language:** {language}
+- **Log Template:** {log_template}
+- **File Location:** {file_path}:{line_number}
+
+## Code Context:
+```
+{code_context}
+```
+
+## Task
+Analyze this log statement and provide:
+
+1. **Analysis** (1-2 concise sentences):
+   - Explain WHY this log statement was written (the business/technical reason)
+   - Describe WHAT CONDITION triggers this log to be emitted
+   - Reference specific variable names or function calls from the code context where relevant
+   - Focus on the developer's intent and the system's behavior
+
+2. **Severity Classification**:
+   Classify the log severity as one of:
+   - **DEBUG**: Detailed diagnostic information for development/debugging
+   - **INFO**: Informational messages about normal system operation
+   - **WARNING**: Warning about potentially problematic situations that don't prevent operation
+   - **ERROR**: Error events that might still allow the application to continue
+   - **CRITICAL**: Severe errors that may cause the application to abort
+
+3. **Suggested Action**:
+   What should a developer or operator do when they see this log in production?
+   - If it's purely informational with no action needed, respond with: null
+   - Otherwise, provide a brief 1-sentence action (e.g., "Check database connectivity", "Verify user permissions", "Investigate recent configuration changes")
+
+## Output Format
+Respond with ONLY valid JSON. Do not include markdown code blocks, explanations, or any other text.
+
+{{
+  "analysis": "Your 1-2 sentence analysis explaining why this log exists and what triggers it",
+  "severity": "INFO",
+  "suggested_action": "Brief action to take, or null if none needed"
+}}
+
+## Important Guidelines
+- Be concise but specific
+- Reference actual code elements (variable names, function calls) from the context
+- Severity should reflect the log level used in the code when possible
+- For suggested_action, think from an operations/monitoring perspective
+- Respond with ONLY the JSON object, nothing else

@@ -4,6 +4,7 @@ Main CLI entry point for LEAP (Log Extraction & Analysis Pipeline).
 This module provides the command-line interface for the leap-cli tool.
 """
 
+import asyncio
 from pathlib import Path
 from typing import Annotated, Literal, cast
 
@@ -15,6 +16,7 @@ from leap.core import aggregate_results, discover_files, filter_changed_files
 from leap.parsers import BaseParser, GoParser, JSParser, PythonParser, RubyParser
 from leap.schemas import RawLogEntry
 from leap.utils.logger import get_logger
+from leap.analyzer import LogAnalyzer, AnalyzerConfig
 
 app = typer.Typer(
     name="leap",
@@ -272,6 +274,209 @@ def _parse_files(file_paths: list[Path], parser: BaseParser, language_name: str)
             continue
 
     return all_entries
+
+
+@app.command()
+def analyze(
+    input_file: Annotated[
+        Path,
+        typer.Argument(
+            help="Path to raw_logs.json file",
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+        ),
+    ],
+    output: Annotated[
+        Path,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Output file path for analyzed_logs.json",
+        ),
+    ] = Path("analyzed_logs.json"),
+    provider: Annotated[
+        Literal["anthropic", "bedrock", "ollama", "lmstudio"],
+        typer.Option(
+            "--provider",
+            "-p",
+            help="LLM provider to use for analysis",
+        ),
+    ] = "anthropic",
+    model: Annotated[
+        str,
+        typer.Option(
+            "--model",
+            "-m",
+            help="Model name/identifier for the selected provider",
+        ),
+    ] = "claude-3-5-sonnet-20241022",
+    concurrency: Annotated[
+        int,
+        typer.Option(
+            "--concurrency",
+            "-c",
+            help="Maximum number of concurrent LLM requests",
+            min=1,
+            max=50,
+        ),
+    ] = 10,
+    language: Annotated[
+        Literal["en", "ru"],
+        typer.Option(
+            "--language",
+            "-l",
+            help="Language for analysis output (en=English, ru=Russian)",
+        ),
+    ] = "en",
+    analysis_prompt: Annotated[
+        Path | None,
+        typer.Option(
+            "--analysis-prompt",
+            help="Path to custom analysis prompt template",
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+        ),
+    ] = None,
+    no_cache: Annotated[
+        bool,
+        typer.Option(
+            "--no-cache",
+            help="Disable caching for duplicate log entries",
+        ),
+    ] = False,
+    timeout: Annotated[
+        int,
+        typer.Option(
+            "--timeout",
+            help="Request timeout in seconds",
+            min=10,
+            max=300,
+        ),
+    ] = 60,
+    verbose: Annotated[
+        bool,
+        typer.Option(
+            "--verbose",
+            "-v",
+            help="Enable verbose output",
+        ),
+    ] = False,
+) -> None:
+    """
+    Analyze logs with LLM to generate human-readable explanations.
+
+    Takes raw_logs.json from the extract command and uses an LLM to analyze
+    each log statement, generating:
+    - Human-readable explanation
+    - Severity classification (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+    - Suggested action for operators
+
+    Examples:
+
+        # Basic usage with Anthropic Claude (requires ANTHROPIC_API_KEY)
+        leap analyze raw_logs.json
+
+        # Use Ollama locally
+        leap analyze raw_logs.json --provider ollama --model llama3:8b
+
+        # Use AWS Bedrock
+        leap analyze raw_logs.json --provider bedrock --model anthropic.claude-3-5-sonnet-20241022-v2:0
+
+        # Custom output path and concurrency
+        leap analyze raw_logs.json -o my_analysis.json -c 20
+
+        # Russian language analysis
+        leap analyze raw_logs.json -l ru
+
+        # Custom prompt template
+        leap analyze raw_logs.json --analysis-prompt my_prompt.txt
+    """
+    try:
+        console.print("[bold blue]LEAP - Log Analysis with LLM[/bold blue]")
+        console.print(f"Input: {input_file}")
+        console.print(f"Provider: {provider}")
+        console.print(f"Model: {model}")
+        console.print(f"Concurrency: {concurrency}")
+        console.print(f"Language: {language}")
+        console.print()
+
+        # Create analyzer configuration
+        config = AnalyzerConfig.from_env(
+            provider=provider,
+            model=model,
+            concurrency=concurrency,
+            language=language,
+            analysis_prompt_path=str(analysis_prompt) if analysis_prompt else None,
+            enable_cache=not no_cache,
+            timeout=timeout,
+        )
+
+        # Validate provider configuration
+        try:
+            config.validate_provider_config()
+        except ValueError as e:
+            console.print(f"[bold red]Configuration Error:[/bold red] {e}")
+            console.print()
+            console.print("[yellow]Hint:[/yellow]")
+
+            if provider == "anthropic":
+                console.print("  Set ANTHROPIC_API_KEY environment variable")
+                console.print("  export ANTHROPIC_API_KEY='sk-ant-...'")
+            elif provider == "bedrock":
+                console.print("  Configure AWS credentials:")
+                console.print("  export AWS_REGION='us-east-1'")
+                console.print("  export AWS_PROFILE='your-profile'")
+            elif provider == "ollama":
+                console.print("  Ensure Ollama is running:")
+                console.print("  ollama serve")
+            elif provider == "lmstudio":
+                console.print("  Ensure LM Studio server is running")
+
+            raise typer.Exit(1)
+
+        # Create analyzer
+        analyzer = LogAnalyzer(config)
+
+        # Run analysis (async)
+        async def run_analysis():
+            return await analyzer.analyze_file(
+                str(input_file.resolve()),
+                str(output.resolve())
+            )
+
+        metadata = asyncio.run(run_analysis())
+
+        # Display results
+        console.print()
+        console.print("[bold green]Analysis Complete![/bold green]")
+        console.print(f"Output written to: {output}")
+        console.print()
+        console.print("[bold]Statistics:[/bold]")
+        console.print(f"  Total entries: {metadata['total_entries']}")
+        console.print(f"  Successful: {metadata['successful']} ({metadata['successful']/metadata['total_entries']*100:.1f}%)")
+        console.print(f"  Failed: {metadata['failed']} ({metadata['failed']/metadata['total_entries']*100:.1f}%)")
+
+        if config.enable_cache:
+            cache_stats = metadata['cache_stats']
+            console.print()
+            console.print("[bold]Cache Statistics:[/bold]")
+            console.print(f"  Hit rate: {cache_stats['hit_rate']:.1f}%")
+            console.print(f"  Hits: {cache_stats['hits']}")
+            console.print(f"  Misses: {cache_stats['misses']}")
+            console.print(f"  Unique entries: {cache_stats['size']}")
+
+    except FileNotFoundError as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
+        if verbose:
+            console.print_exception()
+        logger.error(f"Analysis error: {e}", exc_info=True)
+        raise typer.Exit(1) from None
 
 
 @app.command()
