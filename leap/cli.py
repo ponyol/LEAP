@@ -468,6 +468,15 @@ def analyze(
             console.print(f"  Misses: {cache_stats['misses']}")
             console.print(f"  Unique entries: {cache_stats['size']}")
 
+        # Display token usage if available
+        token_usage = metadata.get('token_usage')
+        if token_usage and token_usage['total_tokens'] > 0:
+            console.print()
+            console.print("[bold]Token Usage:[/bold]")
+            console.print(f"  Input tokens: {token_usage['input_tokens']:,}")
+            console.print(f"  Output tokens: {token_usage['output_tokens']:,}")
+            console.print(f"  Total tokens: {token_usage['total_tokens']:,}")
+
     except FileNotFoundError as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
         raise typer.Exit(1) from e

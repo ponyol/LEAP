@@ -8,10 +8,43 @@ from typing import Any
 
 from .batch_processor import process_batch
 from .config import AnalyzerConfig
-from .providers import get_provider
+from .providers import TokenUsage, get_provider
 from .validators import is_fallback_response, validate_llm_response
 
 logger = logging.getLogger(__name__)
+
+
+class TokenAccumulator:
+    """Accumulates token usage statistics across multiple API calls."""
+
+    def __init__(self) -> None:
+        """Initialize token accumulator."""
+        self.input_tokens = 0
+        self.output_tokens = 0
+        self.total_tokens = 0
+
+    def add(self, usage: TokenUsage | None) -> None:
+        """Add token usage from a single API call.
+
+        Args:
+            usage: Token usage from API response (can be None for local models)
+        """
+        if usage:
+            self.input_tokens += usage.input_tokens
+            self.output_tokens += usage.output_tokens
+            self.total_tokens += usage.total_tokens
+
+    def to_dict(self) -> dict[str, int]:
+        """Convert to dictionary for serialization.
+
+        Returns:
+            Dict with input_tokens, output_tokens, total_tokens
+        """
+        return {
+            "input_tokens": self.input_tokens,
+            "output_tokens": self.output_tokens,
+            "total_tokens": self.total_tokens
+        }
 
 
 class AnalysisCache:
@@ -131,6 +164,7 @@ class LogAnalyzer:
 
         self.provider = get_provider(config)
         self.cache = AnalysisCache(enabled=config.enable_cache)
+        self.token_usage = TokenAccumulator()
         self.prompts = self._load_prompts()
 
     def _load_prompts(self) -> dict[str, str]:
@@ -205,7 +239,7 @@ class LogAnalyzer:
             prompt = self._build_prompt(entry)
 
             # Call LLM with retry
-            response_text = await self.provider.complete_with_retry(
+            response = await self.provider.complete_with_retry(
                 prompt=prompt,
                 model=self.config.model,
                 max_tokens=1024,
@@ -213,9 +247,12 @@ class LogAnalyzer:
                 max_retries=self.config.max_retries
             )
 
+            # Track token usage
+            self.token_usage.add(response.usage)
+
             # Validate response
             validated = validate_llm_response(
-                response_text,
+                response.text,
                 entry.get("log_template", ""),
                 entry.get("file_path", ""),
                 entry.get("line_number", 0)
@@ -343,7 +380,8 @@ class LogAnalyzer:
             "total_entries": len(results),
             "successful": successful,
             "failed": failed,
-            "cache_stats": self.cache.stats()
+            "cache_stats": self.cache.stats(),
+            "token_usage": self.token_usage.to_dict()
         }
 
         output_data: dict[str, Any] = {

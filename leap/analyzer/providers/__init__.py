@@ -5,11 +5,13 @@ from typing import TYPE_CHECKING
 
 from .anthropic import AnthropicProvider
 from .base import (
+    CompletionResponse,
     LLMProvider,
     ProviderAuthError,
     ProviderError,
     ProviderRateLimitError,
     ProviderTimeoutError,
+    TokenUsage,
 )
 from .bedrock import BedrockProvider
 from .lmstudio import LMStudioProvider
@@ -68,6 +70,8 @@ def get_provider(config: "AnalyzerConfig") -> LLMProvider:
 __all__ = [
     # Base classes
     "LLMProvider",
+    "CompletionResponse",
+    "TokenUsage",
     "ProviderError",
     "ProviderTimeoutError",
     "ProviderAuthError",

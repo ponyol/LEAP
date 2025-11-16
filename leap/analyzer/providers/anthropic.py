@@ -5,11 +5,13 @@ import os
 from typing import Any
 
 from .base import (
+    CompletionResponse,
     LLMProvider,
     ProviderAuthError,
     ProviderError,
     ProviderRateLimitError,
     ProviderTimeoutError,
+    TokenUsage,
 )
 
 logger = logging.getLogger(__name__)
@@ -72,7 +74,7 @@ class AnthropicProvider(LLMProvider):
         max_tokens: int = 1024,
         temperature: float = 0.0,
         **kwargs: Any
-    ) -> str:
+    ) -> CompletionResponse:
         """Generate completion using Anthropic API.
 
         Args:
@@ -83,7 +85,7 @@ class AnthropicProvider(LLMProvider):
             **kwargs: Additional parameters (system, stop_sequences, etc.)
 
         Returns:
-            Text response from Claude
+            CompletionResponse with text and token usage
 
         Raises:
             ProviderAuthError: If API key is invalid
@@ -106,9 +108,18 @@ class AnthropicProvider(LLMProvider):
 
             # Extract text from response
             if response.content and len(response.content) > 0:
-                return str(response.content[0].text)
+                text = str(response.content[0].text)
             else:
                 raise ProviderError("Empty response from Anthropic API")
+
+            # Extract token usage
+            usage = TokenUsage(
+                input_tokens=response.usage.input_tokens,
+                output_tokens=response.usage.output_tokens,
+                total_tokens=response.usage.input_tokens + response.usage.output_tokens
+            )
+
+            return CompletionResponse(text=text, usage=usage)
 
         except Exception as e:
             # Map Anthropic exceptions to our custom exceptions

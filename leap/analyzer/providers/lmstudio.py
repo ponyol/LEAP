@@ -4,9 +4,11 @@ import logging
 from typing import Any
 
 from .base import (
+    CompletionResponse,
     LLMProvider,
     ProviderError,
     ProviderTimeoutError,
+    TokenUsage,
 )
 
 logger = logging.getLogger(__name__)
@@ -67,7 +69,7 @@ class LMStudioProvider(LLMProvider):
         max_tokens: int = 1024,
         temperature: float = 0.0,
         **kwargs: Any
-    ) -> str:
+    ) -> CompletionResponse:
         """Generate completion using LM Studio OpenAI-compatible API.
 
         Args:
@@ -78,7 +80,7 @@ class LMStudioProvider(LLMProvider):
             **kwargs: Additional OpenAI-compatible parameters
 
         Returns:
-            Text response from model
+            CompletionResponse with text and token usage (if available)
 
         Raises:
             ProviderTimeoutError: If request times out
@@ -113,9 +115,21 @@ class LMStudioProvider(LLMProvider):
             # Extract message from OpenAI response format
             if "choices" in data and len(data["choices"]) > 0:
                 message = data["choices"][0].get("message", {})
-                return str(message.get("content", ""))
+                text = str(message.get("content", ""))
             else:
                 raise ProviderError(f"Unexpected response format: {data}")
+
+            # Extract token usage if available (OpenAI format)
+            usage = None
+            if "usage" in data:
+                usage_data = data["usage"]
+                usage = TokenUsage(
+                    input_tokens=usage_data.get("prompt_tokens", 0),
+                    output_tokens=usage_data.get("completion_tokens", 0),
+                    total_tokens=usage_data.get("total_tokens", 0)
+                )
+
+            return CompletionResponse(text=text, usage=usage)
 
         except Exception as e:
             error_msg = str(e).lower()

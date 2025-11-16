@@ -5,11 +5,13 @@ import logging
 from typing import Any
 
 from .base import (
+    CompletionResponse,
     LLMProvider,
     ProviderAuthError,
     ProviderError,
     ProviderRateLimitError,
     ProviderTimeoutError,
+    TokenUsage,
 )
 
 logger = logging.getLogger(__name__)
@@ -113,14 +115,14 @@ class BedrockProvider(LLMProvider):
         else:
             raise ValueError(f"Unsupported model family for Bedrock: {model}")
 
-    def _parse_bedrock_response(self, response_body: dict[str, Any]) -> str:
+    def _parse_bedrock_response(self, response_body: dict[str, Any]) -> CompletionResponse:
         """Parse response from Bedrock API.
 
         Args:
             response_body: Parsed JSON response from Bedrock
 
         Returns:
-            Extracted text content
+            CompletionResponse with text and token usage
 
         Raises:
             ProviderError: If response format is unexpected
@@ -129,9 +131,21 @@ class BedrockProvider(LLMProvider):
         if "content" in response_body:
             content = response_body["content"]
             if isinstance(content, list) and len(content) > 0:
-                return str(content[0].get("text", ""))
+                text = str(content[0].get("text", ""))
+            else:
+                raise ProviderError(f"Empty content in response: {response_body}")
+        else:
+            raise ProviderError(f"Unexpected response format: {response_body}")
 
-        raise ProviderError(f"Unexpected response format: {response_body}")
+        # Extract token usage
+        usage_data = response_body.get("usage", {})
+        usage = TokenUsage(
+            input_tokens=usage_data.get("input_tokens", 0),
+            output_tokens=usage_data.get("output_tokens", 0),
+            total_tokens=usage_data.get("input_tokens", 0) + usage_data.get("output_tokens", 0)
+        )
+
+        return CompletionResponse(text=text, usage=usage)
 
     async def complete(
         self,
@@ -140,7 +154,7 @@ class BedrockProvider(LLMProvider):
         max_tokens: int = 1024,
         temperature: float = 0.0,
         **kwargs: Any
-    ) -> str:
+    ) -> CompletionResponse:
         """Generate completion using Bedrock API.
 
         Args:
@@ -151,7 +165,7 @@ class BedrockProvider(LLMProvider):
             **kwargs: Additional parameters
 
         Returns:
-            Text response from model
+            CompletionResponse with text and token usage
 
         Raises:
             ProviderAuthError: If AWS credentials are invalid

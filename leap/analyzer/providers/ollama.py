@@ -4,9 +4,11 @@ import logging
 from typing import Any
 
 from .base import (
+    CompletionResponse,
     LLMProvider,
     ProviderError,
     ProviderTimeoutError,
+    TokenUsage,
 )
 
 logger = logging.getLogger(__name__)
@@ -68,7 +70,7 @@ class OllamaProvider(LLMProvider):
         max_tokens: int = 1024,
         temperature: float = 0.0,
         **kwargs: Any
-    ) -> str:
+    ) -> CompletionResponse:
         """Generate completion using Ollama API.
 
         Args:
@@ -79,7 +81,7 @@ class OllamaProvider(LLMProvider):
             **kwargs: Additional Ollama parameters
 
         Returns:
-            Text response from model
+            CompletionResponse with text and token usage (if available)
 
         Raises:
             ProviderTimeoutError: If request times out
@@ -111,7 +113,21 @@ class OllamaProvider(LLMProvider):
             response.raise_for_status()
 
             data = response.json()
-            return str(data.get("response", ""))
+            text = str(data.get("response", ""))
+
+            # Extract token usage if available
+            # Ollama returns: prompt_eval_count (input), eval_count (output)
+            usage = None
+            if "prompt_eval_count" in data or "eval_count" in data:
+                input_tokens = data.get("prompt_eval_count", 0)
+                output_tokens = data.get("eval_count", 0)
+                usage = TokenUsage(
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    total_tokens=input_tokens + output_tokens
+                )
+
+            return CompletionResponse(text=text, usage=usage)
 
         except Exception as e:
             error_msg = str(e).lower()

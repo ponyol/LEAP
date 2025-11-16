@@ -2,9 +2,25 @@
 
 import logging
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class TokenUsage:
+    """Token usage statistics from LLM API call."""
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+
+
+@dataclass
+class CompletionResponse:
+    """Response from LLM completion with token usage."""
+    text: str
+    usage: TokenUsage | None = None
 
 
 class ProviderError(Exception):
@@ -49,7 +65,7 @@ class LLMProvider(ABC):
         max_tokens: int = 1024,
         temperature: float = 0.0,
         **kwargs: Any
-    ) -> str:
+    ) -> CompletionResponse:
         """Generate completion from LLM.
 
         Args:
@@ -60,7 +76,7 @@ class LLMProvider(ABC):
             **kwargs: Additional provider-specific parameters
 
         Returns:
-            Raw text response from the model
+            CompletionResponse with text and token usage
 
         Raises:
             ProviderError: On API errors
@@ -90,7 +106,7 @@ class LLMProvider(ABC):
         model: str,
         max_retries: int = 3,
         **kwargs: Any
-    ) -> str:
+    ) -> CompletionResponse:
         """Complete with automatic retry on transient failures.
 
         This is a convenience method that wraps complete() with retry logic.
@@ -109,7 +125,7 @@ class LLMProvider(ABC):
             **kwargs: Additional parameters for complete()
 
         Returns:
-            Response from LLM
+            CompletionResponse with text and token usage
 
         Raises:
             ProviderError: If all retries are exhausted
