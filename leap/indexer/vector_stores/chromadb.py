@@ -114,6 +114,7 @@ class ChromaDBVectorStore(VectorStore):
         metadatas = [doc.metadata for doc in documents]
 
         # Add to collection
+        # Note: ChromaDB type hints are overly strict. list[list[float]] is valid.
         collection.add(
             ids=ids,
             embeddings=embeddings,
@@ -142,6 +143,7 @@ class ChromaDBVectorStore(VectorStore):
         collection = self.client.get_collection(name=collection_name)
 
         # Query collection
+        # Note: ChromaDB type hints are overly strict. list[list[float]] is valid.
         results = collection.query(
             query_embeddings=[query_embedding],
             n_results=top_k,

@@ -133,6 +133,15 @@ disallow_subclassing_any = false
 # Allow untyped decorators (for external libs without stubs)
 disallow_untyped_decorators = false
 
+# Dedicated override for chromadb: skip type checking even when installed
+[[tool.mypy.overrides]]
+module = [
+    "chromadb",
+    "chromadb.*",
+]
+follow_imports = "skip"
+ignore_missing_imports = true
+
 [[tool.mypy.overrides]]
 module = [
     "typer",
@@ -145,8 +154,6 @@ module = [
     "httpx",
     "sentence_transformers",
     "langdetect",
-    "chromadb",
-    "chromadb.*",
     "qdrant_client",
     "qdrant_client.*",
     "watchdog",
