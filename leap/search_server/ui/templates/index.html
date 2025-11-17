@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LEAP Log Search</title>
+
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        [x-cloak] { display: none !important; }
+        .search-result {
+            transition: all 0.2s ease-in-out;
+        }
+        .search-result:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="min-h-screen" x-data="searchApp()">
+        <!-- Header -->
+        <header class="bg-white shadow-sm">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                <h1 class="text-3xl font-bold text-gray-900">🔍 LEAP Log Search</h1>
+                <p class="mt-2 text-sm text-gray-600">Semantic search for analyzed logs</p>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <!-- Search Form -->
+            <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+                <form @submit.prevent="performSearch()" class="space-y-4">
+                    <!-- Search Input -->
+                    <div>
+                        <label for="query" class="block text-sm font-medium text-gray-700 mb-2">
+                            Search Query
+                        </label>
+                        <input
+                            type="text"
+                            id="query"
+                            x-model="query"
+                            placeholder="e.g., database connection timeout"
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            required
+                        >
+                    </div>
+
+                    <!-- Filters Row -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <!-- Codebase Filter -->
+                        <div>
+                            <label for="codebase" class="block text-sm font-medium text-gray-700 mb-2">
+                                Codebase
+                            </label>
+                            <select
+                                id="codebase"
+                                x-model="codebase"
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                            >
+                                <option value="">All Codebases</option>
+                                <template x-for="cb in codebases" :key="cb.name">
+                                    <option :value="cb.name" x-text="`${cb.name} (${cb.total_logs} logs)`"></option>
+                                </template>
+                            </select>
+                        </div>
+
+                        <!-- Language Filter -->
+                        <div>
+                            <label for="language" class="block text-sm font-medium text-gray-700 mb-2">
+                                Language
+                            </label>
+                            <select
+                                id="language"
+                                x-model="language"
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                            >
+                                <option value="auto">Auto</option>
+                                <option value="ru">Russian</option>
+                                <option value="en">English</option>
+                            </select>
+                        </div>
+
+                        <!-- Top K -->
+                        <div>
+                            <label for="topK" class="block text-sm font-medium text-gray-700 mb-2">
+                                Results (Top K)
+                            </label>
+                            <input
+                                type="number"
+                                id="topK"
+                                x-model.number="topK"
+                                min="1"
+                                max="50"
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                            >
+                        </div>
+                    </div>
+
+                    <!-- Severity Filters -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            Severity Levels
+                        </label>
+                        <div class="flex flex-wrap gap-4">
+                            <label class="inline-flex items-center">
+                                <input type="checkbox" x-model="severities" value="DEBUG" class="rounded text-blue-600">
+                                <span class="ml-2 text-sm text-gray-700">DEBUG</span>
+                            </label>
+                            <label class="inline-flex items-center">
+                                <input type="checkbox" x-model="severities" value="INFO" class="rounded text-blue-600">
+                                <span class="ml-2 text-sm text-gray-700">INFO</span>
+                            </label>
+                            <label class="inline-flex items-center">
+                                <input type="checkbox" x-model="severities" value="WARNING" class="rounded text-yellow-600">
+                                <span class="ml-2 text-sm text-gray-700">WARNING</span>
+                            </label>
+                            <label class="inline-flex items-center">
+                                <input type="checkbox" x-model="severities" value="ERROR" class="rounded text-red-600">
+                                <span class="ml-2 text-sm text-gray-700">ERROR</span>
+                            </label>
+                            <label class="inline-flex items-center">
+                                <input type="checkbox" x-model="severities" value="CRITICAL" class="rounded text-red-800">
+                                <span class="ml-2 text-sm text-gray-700">CRITICAL</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Search Button -->
+                    <div class="flex justify-end">
+                        <button
+                            type="submit"
+                            class="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 focus:ring-4 focus:ring-blue-300 transition-colors"
+                            :disabled="loading"
+                        >
+                            <span x-show="!loading">🔍 Search</span>
+                            <span x-show="loading" class="flex items-center">
+                                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Searching...
+                            </span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Results -->
+            <div x-show="searched" x-cloak>
+                <!-- Results Header -->
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-semibold text-gray-900">
+                        <span x-text="results.length"></span> results found
+                        <span x-show="searchTime > 0" class="text-sm text-gray-500">
+                            (in <span x-text="searchTime.toFixed(2)"></span>ms)
+                        </span>
+                    </h2>
+                </div>
+
+                <!-- Results List -->
+                <div class="space-y-4">
+                    <template x-for="(result, index) in results" :key="result.id">
+                        <div class="search-result bg-white rounded-lg shadow-md p-6">
+                            <!-- Header -->
+                            <div class="flex justify-between items-start mb-3">
+                                <div class="flex items-center space-x-3">
+                                    <span
+                                        class="px-3 py-1 text-xs font-semibold rounded-full"
+                                        :class="{
+                                            'bg-red-100 text-red-800': result.severity === 'ERROR' || result.severity === 'CRITICAL',
+                                            'bg-yellow-100 text-yellow-800': result.severity === 'WARNING',
+                                            'bg-blue-100 text-blue-800': result.severity === 'INFO',
+                                            'bg-gray-100 text-gray-800': result.severity === 'DEBUG'
+                                        }"
+                                        x-text="result.severity"
+                                    ></span>
+                                    <span class="text-sm text-gray-600" x-text="result.codebase_name"></span>
+                                    <span class="text-sm text-gray-400">•</span>
+                                    <span class="text-sm text-gray-600 font-mono" x-text="result.source_file"></span>
+                                </div>
+                                <span class="px-2 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded">
+                                    Score: <span x-text="(result.score * 100).toFixed(1)"></span>%
+                                </span>
+                            </div>
+
+                            <!-- Template -->
+                            <div class="mb-3">
+                                <h3 class="text-sm font-medium text-gray-700 mb-1">Log Template:</h3>
+                                <code class="block bg-gray-50 p-3 rounded text-sm text-gray-900" x-text="result.log_template"></code>
+                            </div>
+
+                            <!-- Analysis -->
+                            <div class="mb-3">
+                                <h3 class="text-sm font-medium text-gray-700 mb-1">Analysis:</h3>
+                                <p class="text-sm text-gray-600" x-text="result.analysis"></p>
+                            </div>
+
+                            <!-- Suggested Action -->
+                            <div x-show="result.suggested_action">
+                                <h3 class="text-sm font-medium text-gray-700 mb-1">Suggested Action:</h3>
+                                <p class="text-sm text-blue-600" x-text="result.suggested_action"></p>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- No Results -->
+                <div x-show="results.length === 0" class="text-center py-12">
+                    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <h3 class="mt-2 text-sm font-medium text-gray-900">No results found</h3>
+                    <p class="mt-1 text-sm text-gray-500">Try adjusting your search query or filters</p>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="bg-white border-t border-gray-200 mt-12">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                <p class="text-center text-sm text-gray-500">
+                    LEAP Log Search Server •
+                    <a href="/docs" class="text-blue-600 hover:text-blue-800">API Docs</a> •
+                    <a href="/api/health" class="text-blue-600 hover:text-blue-800">Health Check</a>
+                </p>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        function searchApp() {
+            return {
+                // Form fields
+                query: '',
+                codebase: '',
+                language: 'auto',
+                topK: 5,
+                severities: [],
+
+                // Results
+                results: [],
+                searchTime: 0,
+                searched: false,
+                loading: false,
+
+                // Codebases
+                codebases: [],
+
+                // Initialize
+                init() {
+                    this.loadCodebases();
+                },
+
+                // Load available codebases
+                async loadCodebases() {
+                    try {
+                        const response = await fetch('/api/codebases');
+                        const data = await response.json();
+                        this.codebases = data.codebases;
+                    } catch (error) {
+                        console.error('Error loading codebases:', error);
+                    }
+                },
+
+                // Perform search
+                async performSearch() {
+                    this.loading = true;
+                    this.searched = false;
+
+                    try {
+                        const requestBody = {
+                            query: this.query,
+                            top_k: this.topK,
+                            language: this.language
+                        };
+
+                        if (this.codebase) {
+                            requestBody.codebase = this.codebase;
+                        }
+
+                        if (this.severities.length > 0) {
+                            requestBody.filters = {
+                                severity: this.severities
+                            };
+                        }
+
+                        const response = await fetch('/api/search', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(requestBody)
+                        });
+
+                        const data = await response.json();
+                        this.results = data.results;
+                        this.searchTime = data.search_time_ms;
+                        this.searched = true;
+                    } catch (error) {
+                        console.error('Search error:', error);
+                        alert('Search failed: ' + error.message);
+                    } finally {
+                        this.loading = false;
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>
