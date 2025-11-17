@@ -245,7 +245,7 @@ class RipgrepFallback:
 
             return matches
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(
                 f"Ripgrep timeout after {self.timeout}s",
                 extra={"keywords": keywords},

@@ -4,7 +4,7 @@ Configuration for LEAP Search Tester.
 This module defines the configuration schema for the search testing command.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator
@@ -63,14 +63,14 @@ class SearchTesterConfig(BaseModel):
     )
 
     start_date: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc).replace(
+        default_factory=lambda: datetime.now(UTC).replace(
             hour=0, minute=0, second=0, microsecond=0
         ),
         description="Query start time (RFC3339)",
     )
 
     end_date: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc).replace(
+        default_factory=lambda: datetime.now(UTC).replace(
             hour=23, minute=59, second=59, microsecond=999999
         ),
         description="Query end time (RFC3339)",
@@ -140,7 +140,7 @@ class SearchTesterConfig(BaseModel):
         """Ensure datetime has timezone info."""
         if v.tzinfo is None:
             # Assume UTC if no timezone
-            return v.replace(tzinfo=timezone.utc)
+            return v.replace(tzinfo=UTC)
         return v
 
     def get_start_date_rfc3339(self) -> str:

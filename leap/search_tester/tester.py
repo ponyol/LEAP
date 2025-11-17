@@ -7,7 +7,6 @@ and ripgrep fallback to test search quality.
 
 import asyncio
 import time
-from typing import Any
 
 from rich.console import Console
 from rich.live import Live

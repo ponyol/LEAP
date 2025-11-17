@@ -6,7 +6,6 @@ This module defines the data structures used throughout the search testing pipel
 
 import statistics
 from dataclasses import dataclass, field
-from datetime import datetime
 from typing import Any, Literal
 
 

@@ -5,6 +5,7 @@ This module provides the command-line interface for the leap-cli tool.
 """
 
 import asyncio
+from datetime import UTC
 from pathlib import Path
 from typing import Annotated, Any, Literal, cast
 
@@ -963,7 +964,7 @@ def test_search(
           --resume
     """
     import asyncio
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from leap.search_tester import (
         RipgrepFallback,
@@ -980,7 +981,7 @@ def test_search(
     try:
         # Parse dates (default to today if not specified)
         if start_date is None:
-            start_dt = datetime.now(timezone.utc).replace(
+            start_dt = datetime.now(UTC).replace(
                 hour=0, minute=0, second=0, microsecond=0
             )
             start_date_str = start_dt.isoformat()
@@ -988,7 +989,7 @@ def test_search(
             start_date_str = start_date
 
         if end_date is None:
-            end_dt = datetime.now(timezone.utc).replace(
+            end_dt = datetime.now(UTC).replace(
                 hour=23, minute=59, second=59, microsecond=999999
             )
             end_date_str = end_dt.isoformat()
@@ -1123,7 +1124,7 @@ def test_search(
                 # Merge with checkpoint results if resuming
                 if checkpoint:
                     all_results = []
-                    for i, log in enumerate(logs):
+                    for i, _log in enumerate(logs):
                         if i in checkpoint:
                             result = checkpoint.get_result(i)
                             if result:

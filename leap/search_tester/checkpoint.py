@@ -200,7 +200,7 @@ class TestCheckpoint:
         Returns:
             Progress as float (0.0 - 1.0)
         """
-        total = self.metadata.get("total_logs", 0)
+        total = int(self.metadata.get("total_logs", 0))
         if total == 0:
             return 0.0
 

@@ -9,7 +9,7 @@ This module provides functions to generate various output formats:
 
 import csv
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -40,7 +40,7 @@ def generate_json_output(
     output_data = {
         "metadata": {
             **metadata,
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_at": datetime.now(UTC).isoformat(),
         },
         "metrics": metrics.to_dict(),
         "results": [result.to_dict() for result in results],
@@ -76,7 +76,7 @@ def generate_markdown_report(
     lines.append("# LEAP Search Quality Report")
     lines.append("")
     lines.append(
-        f"**Generated**: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
+        f"**Generated**: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}"
     )
     lines.append(f"**Duration**: {metrics.total_duration_seconds:.1f} seconds")
     lines.append("")
@@ -173,9 +173,10 @@ def generate_markdown_report(
             lines.append(
                 f"- **Similarity**: {result.ripgrep_similarity:.2f}"
             )
-            lines.append(f"- **Code**: `{result.ripgrep_match[:150]}`")
+            ripgrep_match_text = result.ripgrep_match[:150] if result.ripgrep_match else ""
+            lines.append(f"- **Code**: `{ripgrep_match_text}`")
             lines.append(
-                f"- **Action**: ⚠️  This log should be indexed"
+                "- **Action**: ⚠️  This log should be indexed"
             )
             lines.append("")
 

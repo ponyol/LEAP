@@ -223,7 +223,7 @@ class SearchBackendClient:
             response.raise_for_status()
 
             data = response.json()
-            codebases = data.get("codebases", [])
+            codebases: list[dict[str, Any]] = data.get("codebases", [])
 
             logger.debug(f"Found {len(codebases)} codebases in search backend")
             return codebases
