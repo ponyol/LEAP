@@ -8,7 +8,7 @@ and ripgrep fallback to test search quality.
 import asyncio
 import time
 
-from rich.console import Console
+from rich.console import Console, Group
 from rich.live import Live
 from rich.panel import Panel
 from rich.progress import (
@@ -342,10 +342,13 @@ class SearchTester:
                     progress.update(task, advance=1)
 
                     # Update live display with stats
+                    group = Group(
+                        progress,
+                        self._create_stats_table(len(logs)),
+                    )
                     live.update(
-                        Panel.fit(
-                            progress,
-                            self._create_stats_table(len(logs)),
+                        Panel(
+                            group,
                             title="[bold cyan]Testing Search Quality[/bold cyan]",
                             border_style="cyan",
                         )

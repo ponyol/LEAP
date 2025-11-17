@@ -62,5 +62,7 @@ class SentenceTransformersEmbeddings(EmbeddingProvider):
             Dimension of the embedding vectors
         """
         # Get dimension from model's configuration
-        dimension: int = self.model.get_sentence_embedding_dimension()
-        return dimension
+        dimension = self.model.get_sentence_embedding_dimension()
+        if dimension is None:
+            raise ValueError("Failed to get embedding dimension from model")
+        return int(dimension)

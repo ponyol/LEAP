@@ -157,12 +157,12 @@ class QdrantVectorStore(VectorStore):
             qdrant_filter = filters
 
         # Search
-        results = self.client.search(
+        results = self.client.query_points(
             collection_name=collection_name,
-            query_vector=query_embedding,
+            query=query_embedding,
             limit=top_k,
             query_filter=qdrant_filter,
-        )
+        ).points
 
         # Convert to SearchResult objects
         search_results = []

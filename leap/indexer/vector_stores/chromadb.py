@@ -152,10 +152,14 @@ class ChromaDBVectorStore(VectorStore):
         search_results = []
         if results["ids"] and results["ids"][0]:
             for i in range(len(results["ids"][0])):
+                metadata_raw = results["metadatas"][0][i] if results["metadatas"] else {}
+                # Convert chromadb metadata format to dict[str, Any]
+                metadata: dict[str, Any] = dict(metadata_raw) if metadata_raw else {}
+
                 doc = Document(
                     id=results["ids"][0][i],
                     text=results["documents"][0][i] if results["documents"] else "",
-                    metadata=results["metadatas"][0][i] if results["metadatas"] else {},
+                    metadata=metadata,
                 )
                 # ChromaDB returns distances, convert to similarity score (1 - distance)
                 # Distance is L2 distance, normalized to [0, 2]
