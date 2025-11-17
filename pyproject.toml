@@ -26,6 +26,21 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Analyzer dependencies (LLM providers)
+analyzer = [
+    "anthropic>=0.39.0",  # Anthropic Claude
+    "boto3>=1.35.0",      # AWS Bedrock
+    "httpx>=0.28.0",      # Ollama & LMStudio
+]
+
+# All analyzer providers
+all = [
+    "anthropic>=0.39.0",
+    "boto3>=1.35.0",
+    "httpx>=0.28.0",
+]
+
+# Development dependencies
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
@@ -74,7 +89,7 @@ disallow_subclassing_any = false
 disallow_untyped_decorators = false
 
 [[tool.mypy.overrides]]
-module = ["typer", "rich.*", "pydantic"]
+module = ["typer", "rich.*", "pydantic", "pydantic_core", "anthropic", "boto3", "botocore.*", "httpx"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
