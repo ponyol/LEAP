@@ -189,6 +189,8 @@ class TestResult:
     status: Literal["found", "fallback_found", "not_found"] = "not_found"
     is_false_negative: bool = False
 
+    __test__ = False  # Tell pytest this is not a test class
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {
@@ -260,6 +262,8 @@ class TestMetrics:
 
     avg_match_score: float | None
     total_duration_seconds: float
+
+    __test__ = False  # Tell pytest this is not a test class
 
     @staticmethod
     def _percentile(data: list[float], percentile: float) -> float:

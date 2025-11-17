@@ -35,6 +35,8 @@ class TestCheckpoint:
         ...     print("Log 5 already tested")
     """
 
+    __test__ = False  # Tell pytest this is not a test class
+
     def __init__(
         self,
         checkpoint_file: Path,

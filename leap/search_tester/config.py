@@ -7,7 +7,7 @@ This module defines the configuration schema for the search testing command.
 from datetime import UTC, datetime
 from pathlib import Path
 
-from pydantic import BaseModel, Field, HttpUrl, field_validator
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 
 
 class SearchTesterConfig(BaseModel):
@@ -151,8 +151,7 @@ class SearchTesterConfig(BaseModel):
         """Get end date in RFC3339 format for VictoriaLogs."""
         return self.end_date.isoformat()
 
-    class Config:
-        """Pydantic configuration."""
-
+    model_config = ConfigDict(
         # Allow arbitrary types (Path, HttpUrl)
-        arbitrary_types_allowed = True
+        arbitrary_types_allowed=True,
+    )
