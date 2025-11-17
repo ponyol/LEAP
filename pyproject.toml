@@ -54,6 +54,12 @@ search = [
     "rank-bm25>=0.2.2",              # BM25 algorithm
 ]
 
+# Search Tester dependencies (validation & QA)
+search-tester = [
+    "httpx>=0.28.0",                 # HTTP client for APIs
+    "tenacity>=9.0.0",               # Retry logic with exponential backoff
+]
+
 # All optional dependencies
 all = [
     # Analyzer
@@ -75,6 +81,8 @@ all = [
     "langchain>=0.3.13",
     "langchain-community>=0.3.13",
     "rank-bm25>=0.2.2",
+    # Search Tester
+    "tenacity>=9.0.0",
 ]
 
 # Development dependencies
@@ -152,6 +160,7 @@ module = [
     "langchain_community",
     "langchain_community.*",
     "rank_bm25",
+    "tenacity",
 ]
 ignore_missing_imports = true
 

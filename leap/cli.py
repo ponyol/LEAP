@@ -799,6 +799,386 @@ def serve(
         raise typer.Exit(1) from None
 
 
+@app.command(name="test-search")
+def test_search(
+    victoria_url: Annotated[
+        str,
+        typer.Option(
+            "--victoria-url",
+            help="VictoriaLogs API endpoint URL",
+        ),
+    ],
+    query: Annotated[
+        str,
+        typer.Option(
+            "--query",
+            "-q",
+            help="LogsQL query to fetch logs",
+        ),
+    ],
+    search_url: Annotated[
+        str,
+        typer.Option(
+            "--search-url",
+            help="LEAP search backend URL",
+        ),
+    ],
+    source_path: Annotated[
+        Path,
+        typer.Option(
+            "--source-path",
+            "-s",
+            help="Path to source code for ripgrep fallback",
+            exists=True,
+            file_okay=False,
+            dir_okay=True,
+        ),
+    ],
+    limit: Annotated[
+        int,
+        typer.Option(
+            "--limit",
+            "-l",
+            help="Maximum number of logs to test",
+            min=1,
+            max=10000,
+        ),
+    ] = 100,
+    concurrency: Annotated[
+        int,
+        typer.Option(
+            "--concurrency",
+            "-c",
+            help="Maximum concurrent search requests",
+            min=1,
+            max=50,
+        ),
+    ] = 5,
+    start_date: Annotated[
+        str | None,
+        typer.Option(
+            "--start-date",
+            help="Query start time (RFC3339 format, e.g., 2025-11-17T00:00:00Z)",
+        ),
+    ] = None,
+    end_date: Annotated[
+        str | None,
+        typer.Option(
+            "--end-date",
+            help="Query end time (RFC3339 format, e.g., 2025-11-17T23:59:59Z)",
+        ),
+    ] = None,
+    codebase: Annotated[
+        str | None,
+        typer.Option(
+            "--codebase",
+            help="Codebase name to filter search results",
+        ),
+    ] = None,
+    output: Annotated[
+        Path,
+        typer.Option(
+            "--output",
+            "-o",
+            help="JSON output file path",
+        ),
+    ] = Path("test_results.json"),
+    report: Annotated[
+        Path,
+        typer.Option(
+            "--report",
+            "-r",
+            help="Markdown report file path",
+        ),
+    ] = Path("test_report.md"),
+    csv_file: Annotated[
+        Path,
+        typer.Option(
+            "--csv",
+            help="CSV metrics file path",
+        ),
+    ] = Path("test_metrics.csv"),
+    timeout: Annotated[
+        int,
+        typer.Option(
+            "--timeout",
+            help="Request timeout in seconds",
+            min=5,
+            max=300,
+        ),
+    ] = 30,
+    resume: Annotated[
+        bool,
+        typer.Option(
+            "--resume",
+            help="Resume from checkpoint if available",
+        ),
+    ] = False,
+    verbose: Annotated[
+        bool,
+        typer.Option(
+            "--verbose",
+            "-v",
+            help="Enable verbose debug logging",
+        ),
+    ] = False,
+) -> None:
+    """
+    Test search quality by comparing VictoriaLogs data against search backend.
+
+    This command validates the LEAP search system by:
+    1. Fetching logs from VictoriaLogs
+    2. Querying the search backend for each log
+    3. Using ripgrep fallback for logs not found
+    4. Calculating metrics (hit rate, response time, false negatives)
+    5. Generating reports in JSON, Markdown, and CSV formats
+
+    Examples:
+
+        # Basic usage (test 100 logs from today)
+        leap test-search \\
+          --victoria-url "http://localhost:9428" \\
+          --query '_stream:{namespace="app"} AND error' \\
+          --search-url "http://localhost:8000" \\
+          --source-path "/home/user/my-project"
+
+        # Advanced usage with custom date range
+        leap test-search \\
+          --victoria-url "http://victoria.example.com:9428" \\
+          --query '_stream:{service="api"} AND _msg:~"database|timeout"' \\
+          --search-url "http://search.example.com:8000" \\
+          --source-path "/workspace/api-service" \\
+          --limit 500 \\
+          --concurrency 10 \\
+          --start-date "2025-11-17T09:00:00Z" \\
+          --end-date "2025-11-17T17:00:00Z" \\
+          --codebase "backend-python"
+
+        # Resume interrupted test
+        leap test-search \\
+          --victoria-url "http://localhost:9428" \\
+          --query 'error' \\
+          --search-url "http://localhost:8000" \\
+          --source-path "/home/user/project" \\
+          --resume
+    """
+    import asyncio
+    from datetime import datetime, timezone
+
+    from leap.search_tester import (
+        RipgrepFallback,
+        SearchBackendClient,
+        SearchTester,
+        TestCheckpoint,
+        VictoriaLogsClient,
+        display_summary,
+        generate_csv_output,
+        generate_json_output,
+        generate_markdown_report,
+    )
+
+    try:
+        # Parse dates (default to today if not specified)
+        if start_date is None:
+            start_dt = datetime.now(timezone.utc).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+            start_date_str = start_dt.isoformat()
+        else:
+            start_date_str = start_date
+
+        if end_date is None:
+            end_dt = datetime.now(timezone.utc).replace(
+                hour=23, minute=59, second=59, microsecond=999999
+            )
+            end_date_str = end_dt.isoformat()
+        else:
+            end_date_str = end_date
+
+        # Display configuration
+        console.print("[bold cyan]LEAP - Search Quality Testing[/bold cyan]")
+        console.print()
+        console.print("[bold]Configuration:[/bold]")
+        console.print(f"  VictoriaLogs: {victoria_url}")
+        console.print(f"  Search Backend: {search_url}")
+        console.print(f"  Query: {query}")
+        console.print(f"  Time Range: {start_date_str} - {end_date_str}")
+        console.print(f"  Limit: {limit} logs")
+        console.print(f"  Concurrency: {concurrency}")
+        if codebase:
+            console.print(f"  Codebase: {codebase}")
+        console.print()
+
+        # Create metadata for outputs
+        metadata = {
+            "victoria_url": victoria_url,
+            "search_url": search_url,
+            "query": query,
+            "start_date": start_date_str,
+            "end_date": end_date_str,
+            "limit": limit,
+            "concurrency": concurrency,
+            "codebase": codebase,
+            "source_path": str(source_path),
+            "output_file": str(output),
+            "report_file": str(report),
+            "csv_file": str(csv_file),
+        }
+
+        # Main async function
+        async def run_test() -> None:
+            # Create clients
+            victoria_client = VictoriaLogsClient(victoria_url, timeout=timeout)
+            search_client = SearchBackendClient(search_url, timeout=timeout)
+            ripgrep_fallback = RipgrepFallback(source_path, timeout=10)
+
+            try:
+                # Health checks
+                console.print("[bold]Checking services...[/bold]")
+
+                victoria_ok = await victoria_client.health_check()
+                if not victoria_ok:
+                    console.print(
+                        "[yellow]⚠️  Warning: VictoriaLogs health check failed[/yellow]"
+                    )
+
+                search_ok = await search_client.health_check()
+                if not search_ok:
+                    console.print(
+                        "[yellow]⚠️  Warning: Search backend health check failed[/yellow]"
+                    )
+
+                console.print()
+
+                # Check for checkpoint and resume
+                checkpoint_file = Path(".leap_test_checkpoint.json")
+                checkpoint = None
+
+                if resume and checkpoint_file.exists():
+                    try:
+                        checkpoint = TestCheckpoint.load(checkpoint_file)
+                        console.print(
+                            f"[cyan]📂 Resuming from checkpoint: {len(checkpoint)} tests completed[/cyan]"
+                        )
+                        console.print()
+                    except Exception as e:
+                        console.print(
+                            f"[yellow]⚠️  Failed to load checkpoint: {e}[/yellow]"
+                        )
+                        checkpoint = None
+
+                # Fetch logs from VictoriaLogs
+                with Progress(
+                    SpinnerColumn(),
+                    TextColumn("[progress.description]{task.description}"),
+                    console=console,
+                ) as progress:
+                    task = progress.add_task(
+                        "[cyan]Fetching logs from VictoriaLogs...",
+                        total=None,
+                    )
+
+                    logs = await victoria_client.query_logs(
+                        query=query,
+                        start=start_date_str,
+                        end=end_date_str,
+                        limit=limit,
+                    )
+
+                    progress.update(task, completed=True)
+
+                if not logs:
+                    console.print("[yellow]⚠️  No logs found![/yellow]")
+                    return
+
+                console.print(
+                    f"[green]✓[/green] Fetched {len(logs)} logs from VictoriaLogs"
+                )
+                console.print()
+
+                # Filter out already completed logs (if resuming)
+                if checkpoint:
+                    remaining_logs = [
+                        log for i, log in enumerate(logs) if i not in checkpoint
+                    ]
+                    console.print(
+                        f"[cyan]Remaining: {len(remaining_logs)} logs to test[/cyan]"
+                    )
+                    console.print()
+                else:
+                    remaining_logs = logs
+
+                # Create tester
+                tester = SearchTester(
+                    victoria_client=victoria_client,
+                    search_client=search_client,
+                    ripgrep_fallback=ripgrep_fallback,
+                    concurrency=concurrency,
+                    codebase=codebase,
+                )
+
+                # Run tests
+                results, metrics = await tester.run_tests(remaining_logs)
+
+                # Merge with checkpoint results if resuming
+                if checkpoint:
+                    all_results = []
+                    for i, log in enumerate(logs):
+                        if i in checkpoint:
+                            result = checkpoint.get_result(i)
+                            if result:
+                                all_results.append(result)
+                        else:
+                            # Map back to result
+                            idx_in_remaining = len(
+                                [j for j in range(i) if j not in checkpoint]
+                            )
+                            if idx_in_remaining < len(results):
+                                all_results.append(results[idx_in_remaining])
+
+                    results = all_results
+
+                    # Recalculate metrics with all results
+                    from leap.search_tester.models import TestMetrics
+
+                    metrics = TestMetrics.from_results(
+                        results, metrics.total_duration_seconds
+                    )
+
+                    # Delete checkpoint on success
+                    checkpoint.delete()
+
+                # Display summary
+                display_summary(metrics, metadata)
+
+                # Generate outputs
+                console.print("[bold]Generating outputs...[/bold]")
+
+                generate_json_output(results, metrics, metadata, output)
+                generate_markdown_report(results, metrics, metadata, report)
+                generate_csv_output(results, csv_file)
+
+                console.print("[green]✅ All outputs generated successfully![/green]")
+
+            finally:
+                await victoria_client.close()
+                await search_client.close()
+
+        # Run async function
+        asyncio.run(run_test())
+
+    except KeyboardInterrupt:
+        console.print()
+        console.print("[yellow]⚠️  Test interrupted by user[/yellow]")
+        console.print("[cyan]Use --resume to continue from checkpoint[/cyan]")
+        raise typer.Exit(0) from None
+
+    except Exception as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
+        logger.error(f"Test failed: {e}", exc_info=True)
+        raise typer.Exit(1) from None
+
+
 @app.command()
 def version() -> None:
     """Display version information."""
