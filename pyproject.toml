@@ -33,11 +33,48 @@ analyzer = [
     "httpx>=0.28.0",      # Ollama & LMStudio
 ]
 
-# All analyzer providers
+# Indexer dependencies (embeddings & vector stores)
+indexer = [
+    "sentence-transformers>=3.3.1",  # Embeddings & Re-Ranking
+    "torch>=2.6.0",                  # Required by sentence-transformers
+    "langdetect>=1.0.9",             # Language detection
+    "chromadb>=0.5.23",              # Vector DB (default)
+    "qdrant-client>=1.12.1",         # Vector DB (production)
+    "watchdog>=6.0.0",               # File watching for auto-reindex
+]
+
+# Search Server dependencies (FastAPI & hybrid search)
+search = [
+    "fastapi>=0.115.6",              # Web framework
+    "uvicorn[standard]>=0.34.0",     # ASGI server
+    "jinja2>=3.1.5",                 # HTML templates
+    "python-multipart>=0.0.20",      # Form data support
+    "langchain>=0.3.13",             # Hybrid search framework
+    "langchain-community>=0.3.13",   # Community retrievers
+    "rank-bm25>=0.2.2",              # BM25 algorithm
+]
+
+# All optional dependencies
 all = [
+    # Analyzer
     "anthropic>=0.39.0",
     "boto3>=1.35.0",
     "httpx>=0.28.0",
+    # Indexer
+    "sentence-transformers>=3.3.1",
+    "torch>=2.6.0",
+    "langdetect>=1.0.9",
+    "chromadb>=0.5.23",
+    "qdrant-client>=1.12.1",
+    "watchdog>=6.0.0",
+    # Search Server
+    "fastapi>=0.115.6",
+    "uvicorn[standard]>=0.34.0",
+    "jinja2>=3.1.5",
+    "python-multipart>=0.0.20",
+    "langchain>=0.3.13",
+    "langchain-community>=0.3.13",
+    "rank-bm25>=0.2.2",
 ]
 
 # Development dependencies
@@ -89,7 +126,33 @@ disallow_subclassing_any = false
 disallow_untyped_decorators = false
 
 [[tool.mypy.overrides]]
-module = ["typer", "rich.*", "pydantic", "pydantic_core", "anthropic", "boto3", "botocore.*", "httpx"]
+module = [
+    "typer",
+    "rich.*",
+    "pydantic",
+    "pydantic_core",
+    "anthropic",
+    "boto3",
+    "botocore.*",
+    "httpx",
+    "sentence_transformers",
+    "langdetect",
+    "chromadb",
+    "chromadb.*",
+    "qdrant_client",
+    "qdrant_client.*",
+    "watchdog",
+    "watchdog.*",
+    "fastapi",
+    "fastapi.*",
+    "uvicorn",
+    "jinja2",
+    "langchain",
+    "langchain.*",
+    "langchain_community",
+    "langchain_community.*",
+    "rank_bm25",
+]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

@@ -14,8 +14,10 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from leap.analyzer import AnalyzerConfig, LogAnalyzer
 from leap.core import aggregate_results, discover_files, filter_changed_files
+from leap.indexer import IndexerConfig, LogIndexer, VectorStoreType
 from leap.parsers import BaseParser, GoParser, JSParser, PythonParser, RubyParser
 from leap.schemas import RawLogEntry
+from leap.search_server import SearchServerConfig, create_app
 from leap.utils.logger import get_logger
 
 app = typer.Typer(
@@ -493,6 +495,307 @@ def analyze(
         if verbose:
             console.print_exception()
         logger.error(f"Analysis error: {e}", exc_info=True)
+        raise typer.Exit(1) from None
+
+
+@app.command()
+def index(
+    input_file: Annotated[
+        Path,
+        typer.Argument(
+            help="Path to analyzed_logs.json file",
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+        ),
+    ],
+    codebase: Annotated[
+        str,
+        typer.Option(
+            "--codebase",
+            "-c",
+            help="Name of the codebase (e.g., 'backend-python')",
+        ),
+    ],
+    vector_store: Annotated[
+        Literal["chromadb", "qdrant"],
+        typer.Option(
+            "--vector-store",
+            "-vs",
+            help="Vector store to use",
+        ),
+    ] = "chromadb",
+    embedding_model: Annotated[
+        str,
+        typer.Option(
+            "--embedding-model",
+            "-em",
+            help="Sentence Transformers model name",
+        ),
+    ] = "paraphrase-multilingual-MiniLM-L12-v2",
+    chromadb_path: Annotated[
+        Path,
+        typer.Option(
+            "--chromadb-path",
+            help="Path to ChromaDB storage directory",
+        ),
+    ] = Path(".leap_data/chromadb"),
+    qdrant_url: Annotated[
+        str,
+        typer.Option(
+            "--qdrant-url",
+            help="Qdrant server URL (for Qdrant vector store)",
+        ),
+    ] = "http://localhost:6333",
+    qdrant_api_key: Annotated[
+        str | None,
+        typer.Option(
+            "--qdrant-api-key",
+            help="Qdrant API key (for Qdrant Cloud)",
+        ),
+    ] = None,
+    batch_size: Annotated[
+        int,
+        typer.Option(
+            "--batch-size",
+            "-b",
+            help="Batch size for embedding generation",
+            min=1,
+            max=128,
+        ),
+    ] = 32,
+    watch: Annotated[
+        bool,
+        typer.Option(
+            "--watch",
+            "-w",
+            help="Watch file for changes and auto-reindex",
+        ),
+    ] = False,
+    verbose: Annotated[
+        bool,
+        typer.Option(
+            "--verbose",
+            "-v",
+            help="Enable verbose output",
+        ),
+    ] = False,
+) -> None:
+    """
+    Index analyzed logs into a vector database for semantic search.
+
+    Takes analyzed_logs.json from the analyze command and indexes it into
+    a vector database, separating logs by language (Russian/English).
+
+    Examples:
+
+        # Basic usage with ChromaDB (default)
+        leap index analyzed_logs.json --codebase backend-python
+
+        # Use Qdrant
+        leap index analyzed_logs.json -c backend-python --vector-store qdrant
+
+        # Custom embedding model
+        leap index analyzed_logs.json -c backend-python --embedding-model multilingual-e5-large
+
+        # Custom ChromaDB path
+        leap index analyzed_logs.json -c backend-python --chromadb-path /path/to/db
+    """
+    try:
+        console.print("[bold blue]LEAP - Log Indexing[/bold blue]")
+        console.print(f"Input: {input_file}")
+        console.print(f"Codebase: {codebase}")
+        console.print(f"Vector Store: {vector_store}")
+        console.print(f"Embedding Model: {embedding_model}")
+        console.print()
+
+        # Validate vector store specific settings
+        if vector_store == "qdrant":
+            console.print(f"Qdrant URL: {qdrant_url}")
+
+        # Create indexer configuration
+        config = IndexerConfig(
+            vector_store=VectorStoreType(vector_store),
+            embedding_model_name=embedding_model,
+            chromadb_path=chromadb_path,
+            qdrant_url=qdrant_url,
+            qdrant_api_key=qdrant_api_key,
+            batch_size=batch_size,
+            show_progress=True,
+        )
+
+        # Watch mode
+        if watch:
+            from leap.indexer.watcher import watch_file
+
+            watch_file(
+                file_path=input_file.resolve(),
+                codebase_name=codebase,
+                config=config,
+            )
+            return
+
+        # Create indexer
+        console.print("Loading embedding model...")
+        indexer = LogIndexer(config)
+
+        # Index logs
+        console.print()
+        stats = indexer.index_file(
+            input_path=input_file.resolve(),
+            codebase_name=codebase,
+        )
+
+        # Display results
+        console.print()
+        console.print("[bold green]Indexing Complete![/bold green]")
+        console.print()
+        console.print("[bold]Statistics:[/bold]")
+        console.print(f"  Total logs: {stats.total_logs}")
+        console.print(f"  Russian logs: {stats.ru_logs}")
+        console.print(f"  English logs: {stats.en_logs}")
+        console.print(f"  Duration: {stats.duration_seconds:.1f}s")
+        console.print()
+        console.print("[bold]Collections created:[/bold]")
+        for collection in stats.collections_created:
+            console.print(f"  - {collection}")
+
+    except FileNotFoundError as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
+        raise typer.Exit(1) from e
+    except Exception as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
+        if verbose:
+            console.print_exception()
+        logger.error(f"Indexing error: {e}", exc_info=True)
+        raise typer.Exit(1) from None
+
+
+@app.command()
+def serve(
+    vector_store: Annotated[
+        Literal["chromadb", "qdrant"],
+        typer.Option(
+            "--vector-store",
+            "-vs",
+            help="Vector store to use",
+        ),
+    ] = "chromadb",
+    host: Annotated[
+        str,
+        typer.Option(
+            "--host",
+            help="Server host",
+        ),
+    ] = "0.0.0.0",
+    port: Annotated[
+        int,
+        typer.Option(
+            "--port",
+            "-p",
+            help="Server port",
+        ),
+    ] = 8000,
+    embedding_model: Annotated[
+        str,
+        typer.Option(
+            "--embedding-model",
+            "-em",
+            help="Sentence Transformers model name",
+        ),
+    ] = "paraphrase-multilingual-MiniLM-L12-v2",
+    chromadb_path: Annotated[
+        Path,
+        typer.Option(
+            "--chromadb-path",
+            help="Path to ChromaDB storage directory",
+        ),
+    ] = Path(".leap_data/chromadb"),
+    qdrant_url: Annotated[
+        str,
+        typer.Option(
+            "--qdrant-url",
+            help="Qdrant server URL (for Qdrant vector store)",
+        ),
+    ] = "http://localhost:6333",
+    qdrant_api_key: Annotated[
+        str | None,
+        typer.Option(
+            "--qdrant-api-key",
+            help="Qdrant API key (for Qdrant Cloud)",
+        ),
+    ] = None,
+    reload: Annotated[
+        bool,
+        typer.Option(
+            "--reload",
+            help="Enable auto-reload on code changes (development)",
+        ),
+    ] = False,
+) -> None:
+    """
+    Start the LEAP search server.
+
+    Launches a FastAPI server that provides semantic search over indexed logs.
+
+    Examples:
+
+        # Basic usage with ChromaDB
+        leap serve
+
+        # Use Qdrant
+        leap serve --vector-store qdrant
+
+        # Custom host and port
+        leap serve --host localhost --port 9000
+
+        # Development mode with auto-reload
+        leap serve --reload
+    """
+    try:
+        console.print("[bold blue]LEAP - Search Server[/bold blue]")
+        console.print(f"Vector Store: {vector_store}")
+        console.print(f"Embedding Model: {embedding_model}")
+        console.print()
+
+        # Create server configuration
+        config = SearchServerConfig(
+            host=host,
+            port=port,
+            vector_store=VectorStoreType(vector_store),
+            embedding_model_name=embedding_model,
+            chromadb_path=chromadb_path,
+            qdrant_url=qdrant_url,
+            qdrant_api_key=qdrant_api_key,
+        )
+
+        # Create FastAPI app
+        fastapi_app = create_app(config)
+
+        # Run with uvicorn
+        import uvicorn
+
+        console.print("Starting server...")
+        console.print()
+        console.print(f"🚀 Server will run at http://{host}:{port}")
+        console.print(f"   - Web UI: http://{host}:{port}")
+        console.print(f"   - API Docs: http://{host}:{port}/docs")
+        console.print()
+        console.print("Press Ctrl+C to stop")
+        console.print()
+
+        uvicorn.run(
+            fastapi_app,
+            host=host,
+            port=port,
+            reload=reload,
+            log_level="info",
+        )
+
+    except Exception as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
+        logger.error(f"Server error: {e}", exc_info=True)
         raise typer.Exit(1) from None
 
 
