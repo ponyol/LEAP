@@ -43,6 +43,19 @@ class TestVictoriaLog:
         assert log.time == ""
         assert log.stream == {}
 
+    def test_from_json_with_invalid_stream_string(self) -> None:
+        """Test creating VictoriaLog when _stream is invalid JSON string."""
+        json_data = {
+            "_msg": "test message",
+            "_time": "2025-11-17T10:30:00Z",
+            "_stream": "{invalid json}",  # Invalid JSON string
+        }
+
+        log = VictoriaLog.from_json(json_data)
+
+        assert log.msg == "test message"
+        assert log.stream == {}  # Should default to empty dict on parse error
+
     def test_to_dict(self) -> None:
         """Test converting VictoriaLog to dict."""
         log = VictoriaLog(
@@ -132,6 +145,27 @@ class TestRipgrepMatch:
 
 class TestTestResult:
     """Tests for TestResult model."""
+
+    def test_from_dict(self) -> None:
+        """Test creating TestResult from dictionary."""
+        data = {
+            "log_message": "Test message",
+            "victoria_timestamp": "2025-11-17T10:00:00Z",
+            "victoria_stream": {"app": "test"},
+            "search_found": True,
+            "search_response_time_ms": 50.0,
+            "search_results": [],
+            "best_match_score": 0.9,
+            "ripgrep_found": False,
+            "status": "found",
+            "is_false_negative": False,
+        }
+
+        result = TestResult.from_dict(data)
+
+        assert result.log_message == "Test message"
+        assert result.search_found is True
+        assert result.best_match_score == 0.9
 
     def test_found_by_search(self) -> None:
         """Test result when log is found by search."""
@@ -376,3 +410,8 @@ class TestTestMetrics:
         assert data["avg_response_time_ms"] == 45.0
         assert "p50_response_time_ms" in data
         assert "total_duration_seconds" in data
+
+    def test_percentile_with_empty_data(self) -> None:
+        """Test _percentile method with empty data."""
+        result = TestMetrics._percentile([], 0.5)
+        assert result == 0.0
