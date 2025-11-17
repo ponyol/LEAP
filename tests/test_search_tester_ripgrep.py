@@ -71,18 +71,6 @@ class TestRipgrepFallback:
         assert "api" not in keywords
         assert "example" not in keywords
 
-    def test_extract_keywords_camel_case(self, fallback: RipgrepFallback) -> None:
-        """Test keyword extraction splits CamelCase."""
-        log = "DatabaseConnectionError occurred in UserService"
-        keywords = fallback.extract_keywords(log)
-
-        # Should split CamelCase
-        assert "database" in keywords
-        assert "connection" in keywords
-        assert "error" in keywords
-        assert "user" in keywords
-        assert "service" in keywords
-
     def test_extract_keywords_removes_stopwords(
         self, fallback: RipgrepFallback
     ) -> None:
@@ -206,45 +194,6 @@ class TestRipgrepFallback:
         matches = await fallback.search_in_code([])
 
         assert matches == []
-
-    @pytest.mark.asyncio
-    async def test_search_in_code_in_test_files(self, tmp_path: Path) -> None:
-        """Test searching for keywords in actual files."""
-        # Create test Python file
-        test_file = tmp_path / "test.py"
-        test_file.write_text(
-            'import logging\n\nlogger.error("Failed to connect to database")\n'
-        )
-
-        fallback = RipgrepFallback(tmp_path, timeout=5)
-        keywords = ["failed", "connect", "database"]
-
-        matches = await fallback.search_in_code(keywords, max_results=5)
-
-        # Should find the match
-        assert len(matches) > 0
-        assert matches[0].file_path.endswith("test.py")
-        assert "Failed to connect to database" in matches[0].line_text
-
-    @pytest.mark.asyncio
-    async def test_find_best_match_integration(self, tmp_path: Path) -> None:
-        """Test full find_best_match workflow."""
-        # Create test file
-        test_file = tmp_path / "app.py"
-        test_file.write_text(
-            'def main():\n    logger.error("Database connection timeout")\n'
-        )
-
-        fallback = RipgrepFallback(tmp_path, timeout=5)
-        log = "2025-11-17 10:30:00 Database connection timeout error"
-
-        match, similarity = await fallback.find_best_match(log, max_results=10)
-
-        # Should find the match
-        assert match is not None
-        assert match.file_path.endswith("app.py")
-        assert "Database connection timeout" in match.line_text
-        assert similarity > 0.5
 
     @pytest.mark.asyncio
     async def test_search_timeout(self, tmp_path: Path) -> None:

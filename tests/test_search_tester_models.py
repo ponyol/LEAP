@@ -126,6 +126,7 @@ class TestRipgrepMatch:
             "file_path": "src/app.py",
             "line_number": 10,
             "line_text": "print('hello')",
+            "column": None,
         }
 
 
@@ -284,7 +285,7 @@ class TestTestMetrics:
         assert metrics.false_negative_rate == 0.25  # 1/4
         assert metrics.miss_rate == 0.25  # 1/4
         assert metrics.avg_response_time_ms == 150.0  # (100+200)/2
-        assert metrics.avg_match_score == 0.85  # (0.9+0.8)/2
+        assert abs(metrics.avg_match_score - 0.85) < 0.001  # (0.9+0.8)/2 with float tolerance
 
     def test_from_results_all_found(self) -> None:
         """Test metrics when all logs are found by search."""

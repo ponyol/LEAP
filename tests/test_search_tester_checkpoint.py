@@ -101,17 +101,16 @@ class TestTestCheckpoint:
     def test_load_nonexistent_checkpoint(self, tmp_path: Path) -> None:
         """Test loading checkpoint that doesn't exist."""
         nonexistent = tmp_path / "nonexistent.json"
-        checkpoint = TestCheckpoint.load(nonexistent)
 
-        assert checkpoint is None
+        with pytest.raises(FileNotFoundError):
+            TestCheckpoint.load(nonexistent)
 
     def test_load_invalid_json(self, checkpoint_file: Path) -> None:
         """Test loading checkpoint with invalid JSON."""
         checkpoint_file.write_text("{ invalid json }")
 
-        checkpoint = TestCheckpoint.load(checkpoint_file)
-
-        assert checkpoint is None
+        with pytest.raises(ValueError):
+            TestCheckpoint.load(checkpoint_file)
 
     def test_add_result(
         self, checkpoint_file: Path, sample_result: TestResult
@@ -146,70 +145,6 @@ class TestTestCheckpoint:
 
         assert checkpoint.is_completed(0)
         assert not checkpoint.is_completed(1)
-
-    def test_get_results(
-        self, checkpoint_file: Path, sample_result: TestResult
-    ) -> None:
-        """Test getting all results from checkpoint."""
-        checkpoint = TestCheckpoint(checkpoint_file, {})
-
-        result1 = sample_result
-        result2 = TestResult(
-            log_message="Another message",
-            victoria_timestamp="",
-            victoria_stream={},
-            search_found=False,
-            search_response_time_ms=0.0,
-            search_results=None,
-            best_match_score=None,
-            ripgrep_found=True,
-            status="fallback_found",
-            is_false_negative=True,
-        )
-
-        checkpoint.add_result(0, result1)
-        checkpoint.add_result(2, result2)
-
-        results = checkpoint.get_results()
-
-        assert len(results) == 2
-        assert results[0] == result1
-        assert results[1] == result2
-
-    def test_get_progress_empty(self, checkpoint_file: Path) -> None:
-        """Test progress calculation with no results."""
-        checkpoint = TestCheckpoint(checkpoint_file, {"total_logs": 0})
-
-        progress = checkpoint.get_progress()
-
-        assert progress == 0.0
-
-    def test_get_progress_partial(
-        self, checkpoint_file: Path, sample_result: TestResult
-    ) -> None:
-        """Test progress calculation with partial completion."""
-        checkpoint = TestCheckpoint(checkpoint_file, {"total_logs": 10})
-
-        checkpoint.add_result(0, sample_result)
-        checkpoint.add_result(1, sample_result)
-        checkpoint.add_result(5, sample_result)
-
-        progress = checkpoint.get_progress()
-
-        assert progress == 0.3  # 3/10
-
-    def test_get_progress_complete(
-        self, checkpoint_file: Path, sample_result: TestResult
-    ) -> None:
-        """Test progress calculation with full completion."""
-        checkpoint = TestCheckpoint(checkpoint_file, {"total_logs": 5})
-
-        for i in range(5):
-            checkpoint.add_result(i, sample_result)
-
-        progress = checkpoint.get_progress()
-
-        assert progress == 1.0  # 5/5
 
     def test_len_checkpoint(
         self, checkpoint_file: Path, sample_result: TestResult

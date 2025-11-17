@@ -73,6 +73,15 @@ class VictoriaLog:
             extra_fields=extra_fields,
         )
 
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "msg": self.msg,
+            "time": self.time,
+            "stream": self.stream,
+            **self.extra_fields,
+        }
+
 
 @dataclass
 class SearchResponse:
@@ -144,6 +153,15 @@ class RipgrepMatch:
             line_text=line_text,
             column=column,
         )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "file_path": self.file_path,
+            "line_number": self.line_number,
+            "line_text": self.line_text,
+            "column": self.column,
+        }
 
 
 @dataclass
