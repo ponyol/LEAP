@@ -100,6 +100,30 @@ def get_user(user_id):
         finally:
             temp_path.unlink()
 
+    def test_async_function_logging(self, parser: PythonParser) -> None:
+        """Test extraction from async functions."""
+        code = '''
+import logging
+
+async def fetch_data():
+    logging.info("Fetching data from API")
+    logging.debug("Connection established")
+'''
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+            f.write(code)
+            f.flush()
+            temp_path = Path(f.name)
+
+        try:
+            entries = parser.parse_file(temp_path)
+
+            assert len(entries) == 2
+            assert any(e.log_level == "info" for e in entries)
+            assert any(e.log_level == "debug" for e in entries)
+
+        finally:
+            temp_path.unlink()
+
     def test_class_method_logging(self, parser: PythonParser) -> None:
         """Test extraction from class methods using self.logger."""
         code = '''

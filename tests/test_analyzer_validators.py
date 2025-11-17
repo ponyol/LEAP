@@ -72,6 +72,28 @@ class TestAnalysisResponse:
             )
             assert response.suggested_action is None
 
+    def test_analysis_too_long_truncation(self):
+        """Test that analysis longer than 2000 chars is truncated."""
+        long_analysis = "x" * 2500
+        response = AnalysisResponse(
+            analysis=long_analysis,
+            severity="INFO"
+        )
+
+        assert len(response.analysis) == 2003  # 2000 + "..."
+        assert response.analysis.endswith("...")
+
+    def test_suggested_action_too_long_truncation(self):
+        """Test that suggested_action longer than 500 chars is truncated."""
+        long_action = "y" * 600
+        response = AnalysisResponse(
+            analysis="Test",
+            suggested_action=long_action
+        )
+
+        assert len(response.suggested_action) == 503  # 500 + "..."
+        assert response.suggested_action.endswith("...")
+
 
 class TestExtractJSONFromText:
     """Test JSON extraction from various text formats."""
@@ -125,6 +147,28 @@ That's it!
         """Test that invalid JSON raises JSONDecodeError."""
         text = "This is not JSON at all"
 
+        with pytest.raises(json.JSONDecodeError):
+            extract_json_from_text(text)
+
+    def test_invalid_json_in_markdown_code_block(self):
+        """Test extraction fails when JSON block contains invalid JSON."""
+        text = """
+```json
+{invalid json here}
+```
+"""
+        # Should try to parse the block but fail, then try other strategies
+        with pytest.raises(json.JSONDecodeError):
+            extract_json_from_text(text)
+
+    def test_invalid_json_in_plain_code_block(self):
+        """Test extraction fails when code block contains invalid JSON."""
+        text = """
+```
+{this is not: valid json}
+```
+"""
+        # Should try to parse the block but fail, then try other strategies
         with pytest.raises(json.JSONDecodeError):
             extract_json_from_text(text)
 
@@ -185,6 +229,31 @@ class TestValidateLLMResponse:
 
         result = validate_llm_response(response, "test", "test.py", 1)
 
+        assert is_fallback_response(result)
+
+    def test_validation_error_with_salvage(self):
+        """Test that ValidationError tries to salvage what it can."""
+        # Missing required 'analysis' field will cause ValidationError
+        response = '{"severity": "WARNING", "suggested_action": "Fix this"}'
+
+        result = validate_llm_response(response, "test", "test.py", 1)
+
+        # Should salvage the severity and suggested_action
+        assert result.severity == "WARNING"
+        # The analysis should have fallback message since it was missing
+        assert "[Analysis failed:" in result.analysis
+
+    def test_complete_fallback_on_exception(self):
+        """Test complete fallback when even salvage attempt fails."""
+        # This will trigger json.JSONDecodeError which is caught
+        # The salvage in except ValidationError won't be reached
+        response = "completely invalid response with no json at all"
+
+        result = validate_llm_response(response, "test", "test.py", 1)
+
+        assert result.analysis.startswith("[Analysis failed:")
+        assert result.severity == "UNKNOWN"
+        assert result.suggested_action is None
         assert is_fallback_response(result)
 
 

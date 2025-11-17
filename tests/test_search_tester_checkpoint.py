@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from unittest.mock import patch, MagicMock
 
 import pytest
 
@@ -215,3 +216,82 @@ class TestTestCheckpoint:
         assert loaded2 is not None
         assert len(loaded2) == 3
         assert loaded2.completed_indices == {0, 1, 2}
+
+    def test_get_result(
+        self, checkpoint_file: Path, sample_result: TestResult
+    ) -> None:
+        """Test getting result by index."""
+        checkpoint = TestCheckpoint(checkpoint_file, {})
+
+        # Before adding
+        assert checkpoint.get_result(0) is None
+
+        # After adding
+        checkpoint.add_result(0, sample_result)
+        result = checkpoint.get_result(0)
+
+        assert result is not None
+        assert result.log_message == sample_result.log_message
+
+    def test_contains_operator(
+        self, checkpoint_file: Path, sample_result: TestResult
+    ) -> None:
+        """Test __contains__ method ('in' operator)."""
+        checkpoint = TestCheckpoint(checkpoint_file, {})
+
+        assert 0 not in checkpoint
+
+        checkpoint.add_result(0, sample_result)
+
+        assert 0 in checkpoint
+        assert 1 not in checkpoint
+
+    def test_progress_with_total(
+        self, checkpoint_file: Path, sample_result: TestResult
+    ) -> None:
+        """Test progress calculation with total_logs."""
+        metadata = {"total_logs": 10}
+        checkpoint = TestCheckpoint(checkpoint_file, metadata)
+
+        # No progress
+        assert checkpoint.progress() == 0.0
+
+        # Add some results
+        checkpoint.add_result(0, sample_result)
+        assert checkpoint.progress() == 0.1  # 1/10
+
+        checkpoint.add_result(1, sample_result)
+        checkpoint.add_result(2, sample_result)
+        assert checkpoint.progress() == 0.3  # 3/10
+
+    def test_progress_without_total(self, checkpoint_file: Path) -> None:
+        """Test progress when total_logs is not set."""
+        metadata = {}
+        checkpoint = TestCheckpoint(checkpoint_file, metadata)
+
+        # Should return 0.0 when total is unknown
+        assert checkpoint.progress() == 0.0
+
+    def test_delete_checkpoint(
+        self, checkpoint_file: Path, sample_result: TestResult
+    ) -> None:
+        """Test deleting checkpoint file."""
+        checkpoint = TestCheckpoint(checkpoint_file, {})
+        checkpoint.add_result(0, sample_result)
+        checkpoint.save()
+
+        assert checkpoint_file.exists()
+
+        # Delete checkpoint
+        checkpoint.delete()
+
+        assert not checkpoint_file.exists()
+
+    def test_delete_nonexistent_checkpoint(self, checkpoint_file: Path) -> None:
+        """Test deleting checkpoint that doesn't exist."""
+        checkpoint = TestCheckpoint(checkpoint_file, {})
+
+        # Should not raise error
+        checkpoint.delete()
+
+        assert not checkpoint_file.exists()
